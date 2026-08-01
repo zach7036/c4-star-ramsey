@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use these results or artifacts, please cite this repository."
+title: "Two Ramsey numbers: R(C4,K{1,39}) = 46 and R(C4,K{1,51}) = 59 (candidate results, seeking review)"
+authors:
+  - family-names: "Waddle"
+    given-names: "Zach"
+    # The human repository owner is the author of record.
+    # AI assistance is disclosed in AI_DISCLOSURE.md, not listed as authorship.
+date-released: 2026-07-31
+version: "0.1-review"
+repository-code: "https://github.com/zach7036/c4-star-ramsey"
+keywords:
+  - Ramsey numbers
+  - C4-free graphs
+  - extremal graph theory
+  - computer-assisted proof
+license: MIT

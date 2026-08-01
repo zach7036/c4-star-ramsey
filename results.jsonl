@@ -1,0 +1,144 @@
+{"idx": 4, "pq": 0, "types": [0, 0, 1, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 220559, "secs": 41.6}
+{"idx": 5, "pq": 0, "types": [0, 0, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220669, "secs": 81.7}
+{"idx": 8, "pq": 0, "types": [0, 1, 0, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 220559, "secs": 82.9}
+{"idx": 6, "pq": 0, "types": [0, 0, 1, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 220669, "secs": 203.2}
+{"idx": 7, "pq": 0, "types": [0, 0, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 204.9}
+{"idx": 10, "pq": 0, "types": [0, 1, 0, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 220669, "secs": 214.6}
+{"idx": 11, "pq": 0, "types": [0, 1, 0, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 218.2}
+{"idx": 9, "pq": 0, "types": [0, 1, 0, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220669, "secs": 232.3}
+{"idx": 16, "pq": 0, "types": [1, 0, 0, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 220560, "secs": 57.7}
+{"idx": 15, "pq": 0, "types": [0, 1, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 220888, "secs": 74.1}
+{"idx": 12, "pq": 0, "types": [0, 1, 1, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 220670, "secs": 256.0}
+{"idx": 13, "pq": 0, "types": [0, 1, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 277.7}
+{"idx": 14, "pq": 0, "types": [0, 1, 1, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 424.2}
+{"idx": 22, "pq": 0, "types": [1, 0, 1, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 317.5}
+{"idx": 21, "pq": 0, "types": [1, 0, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 342.4}
+{"idx": 17, "pq": 0, "types": [1, 0, 0, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220670, "secs": 377.4}
+{"idx": 24, "pq": 0, "types": [1, 1, 0, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 220670, "secs": 322.8}
+{"idx": 31, "pq": 0, "types": [1, 1, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 220996, "secs": 14.8}
+{"idx": 32, "pq": 1, "types": [0, 0, 0, 0, 0], "s7": 0, "result": "UNSAT", "clauses": 219875, "secs": 17.8}
+{"idx": 26, "pq": 0, "types": [1, 1, 0, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 283.0}
+{"idx": 25, "pq": 0, "types": [1, 1, 0, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220779, "secs": 348.6}
+{"idx": 34, "pq": 1, "types": [0, 0, 0, 0, null], "s7": 1, "result": "UNSAT", "clauses": 219449, "secs": 5.0}
+{"idx": 28, "pq": 0, "types": [1, 1, 1, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 220780, "secs": 103.2}
+{"idx": 33, "pq": 1, "types": [0, 0, 0, 0, 1], "s7": 0, "result": "UNSAT", "clauses": 219990, "secs": 20.5}
+{"idx": 27, "pq": 0, "types": [1, 1, 0, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 220888, "secs": 159.2}
+{"idx": 35, "pq": 1, "types": [0, 0, 0, 1, 0], "s7": 0, "result": "UNSAT", "clauses": 219990, "secs": 28.4}
+{"idx": 68, "pq": 1, "types": [0, 1, null, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219591, "secs": 21.3}
+{"idx": 29, "pq": 0, "types": [1, 1, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 220888, "secs": 162.2}
+{"idx": 86, "pq": 1, "types": [1, 0, 0, null, 0], "s7": 1, "result": "UNSAT", "clauses": 219569, "secs": 14.5}
+{"idx": 85, "pq": 1, "types": [1, 0, 0, 1, null], "s7": 1, "result": "UNSAT", "clauses": 219710, "secs": 85.9}
+{"idx": 88, "pq": 1, "types": [1, 0, 1, 0, 0], "s7": 0, "result": "UNSAT", "clauses": 220105, "secs": 30.8}
+{"idx": 89, "pq": 1, "types": [1, 0, 1, 0, 1], "s7": 0, "result": "UNSAT", "clauses": 220218, "secs": 41.4}
+{"idx": 99, "pq": 1, "types": [1, 0, null, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219805, "secs": 14.5}
+{"idx": 87, "pq": 1, "types": [1, 0, 0, null, 1], "s7": 1, "result": "UNSAT", "clauses": 219710, "secs": 117.9}
+{"idx": 100, "pq": 1, "types": [1, 1, 0, 0, 0], "s7": 0, "result": "UNSAT", "clauses": 220105, "secs": 18.9}
+{"idx": 101, "pq": 1, "types": [1, 1, 0, 0, 1], "s7": 0, "result": "UNSAT", "clauses": 220218, "secs": 17.0}
+{"idx": 69, "pq": 1, "types": [0, 1, null, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219709, "secs": 236.2}
+{"idx": 104, "pq": 1, "types": [1, 1, 0, 1, 1], "s7": 0, "result": "UNSAT", "clauses": 220331, "secs": 7.6}
+{"idx": 103, "pq": 1, "types": [1, 1, 0, 1, 0], "s7": 0, "result": "UNSAT", "clauses": 220218, "secs": 27.1}
+{"idx": 71, "pq": 1, "types": [0, 1, null, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 237.3}
+{"idx": 102, "pq": 1, "types": [1, 1, 0, 0, null], "s7": 1, "result": "UNSAT", "clauses": 219687, "secs": 87.0}
+{"idx": 114, "pq": 1, "types": [1, 1, 1, null, 0], "s7": 1, "result": "UNSAT", "clauses": 219805, "secs": 16.3}
+{"idx": 70, "pq": 1, "types": [0, 1, null, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219709, "secs": 304.9}
+{"idx": 67, "pq": 1, "types": [0, 1, 1, null, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 351.1}
+{"idx": 23, "pq": 0, "types": [1, 0, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 220888, "secs": 743.2}
+{"idx": 106, "pq": 1, "types": [1, 1, 0, null, 0], "s7": 1, "result": "UNSAT", "clauses": 219687, "secs": 131.2}
+{"idx": 116, "pq": 1, "types": [1, 1, null, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219710, "secs": 103.3}
+{"idx": 120, "pq": 1, "types": [1, null, 0, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219569, "secs": 15.6}
+{"idx": 30, "pq": 0, "types": [1, 1, 1, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 220888, "secs": 532.1}
+{"idx": 121, "pq": 1, "types": [1, null, 0, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219687, "secs": 71.0}
+{"idx": 123, "pq": 1, "types": [1, null, 0, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219805, "secs": 6.7}
+{"idx": 122, "pq": 1, "types": [1, null, 0, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219687, "secs": 88.7}
+{"idx": 105, "pq": 1, "types": [1, 1, 0, 1, null], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 410.2}
+{"idx": 107, "pq": 1, "types": [1, 1, 0, null, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 403.6}
+{"idx": 128, "pq": 1, "types": [null, 0, 0, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219472, "secs": 7.7}
+{"idx": 117, "pq": 1, "types": [1, 1, null, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 333.3}
+{"idx": 129, "pq": 1, "types": [null, 0, 0, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219591, "secs": 27.4}
+{"idx": 130, "pq": 1, "types": [null, 0, 0, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219591, "secs": 18.8}
+{"idx": 118, "pq": 1, "types": [1, 1, null, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 354.0}
+{"idx": 131, "pq": 1, "types": [null, 0, 0, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219710, "secs": 26.0}
+{"idx": 132, "pq": 1, "types": [null, 0, 1, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219591, "secs": 28.0}
+{"idx": 134, "pq": 1, "types": [null, 0, 1, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219709, "secs": 93.1}
+{"idx": 133, "pq": 1, "types": [null, 0, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219709, "secs": 131.6}
+{"idx": 136, "pq": 1, "types": [null, 1, 0, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219591, "secs": 28.8}
+{"idx": 115, "pq": 1, "types": [1, 1, 1, null, 1], "s7": 1, "result": "UNSAT", "clauses": 219944, "secs": 555.2}
+{"idx": 119, "pq": 1, "types": [1, 1, null, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219944, "secs": 499.9}
+{"idx": 135, "pq": 1, "types": [null, 0, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 180.6}
+{"idx": 125, "pq": 1, "types": [1, null, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 360.7}
+{"idx": 138, "pq": 1, "types": [null, 1, 0, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219709, "secs": 126.1}
+{"idx": 124, "pq": 1, "types": [1, null, 1, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219710, "secs": 462.4}
+{"idx": 139, "pq": 1, "types": [null, 1, 0, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 166.1}
+{"idx": 141, "pq": 1, "types": [null, 1, 1, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 182.6}
+{"idx": 142, "pq": 1, "types": [null, 1, 1, 1, 0], "s7": 1, "result": "UNSAT", "clauses": 219827, "secs": 174.4}
+{"idx": 137, "pq": 1, "types": [null, 1, 0, 0, 1], "s7": 1, "result": "UNSAT", "clauses": 219709, "secs": 259.1}
+{"idx": 140, "pq": 1, "types": [null, 1, 1, 0, 0], "s7": 1, "result": "UNSAT", "clauses": 219710, "secs": 229.4}
+{"idx": 127, "pq": 1, "types": [1, null, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219944, "secs": 485.2}
+{"idx": 143, "pq": 1, "types": [null, 1, 1, 1, 1], "s7": 1, "result": "UNSAT", "clauses": 219944, "secs": 247.8}
+{"idx": 0, "result": "UNSAT", "secs": 1.9, "source": "cadical-run-1"}
+{"idx": 1, "result": "UNSAT", "secs": 49.0, "source": "cadical-run-1"}
+{"idx": 2, "result": "UNSAT", "secs": 58.6, "source": "cadical-run-1"}
+{"idx": 3, "result": "UNSAT", "secs": 108.0, "source": "cadical-run-1"}
+{"idx": 18, "result": "UNSAT", "secs": 87.1, "source": "cadical-run-1"}
+{"idx": 19, "result": "UNSAT", "secs": 61.1, "source": "cadical-run-1"}
+{"idx": 20, "result": "UNSAT", "secs": 97.8, "source": "cadical-run-1"}
+{"idx": 36, "result": "UNSAT", "secs": 1.9, "source": "cadical-run-1"}
+{"idx": 37, "result": "UNSAT", "secs": 5.6, "source": "cadical-run-1"}
+{"idx": 38, "result": "UNSAT", "secs": 4.9, "source": "cadical-run-1"}
+{"idx": 39, "result": "UNSAT", "secs": 8.3, "source": "cadical-run-1"}
+{"idx": 40, "result": "UNSAT", "secs": 4.6, "source": "cadical-run-1"}
+{"idx": 41, "result": "UNSAT", "secs": 4.1, "source": "cadical-run-1"}
+{"idx": 42, "result": "UNSAT", "secs": 8.6, "source": "cadical-run-1"}
+{"idx": 43, "result": "UNSAT", "secs": 7.9, "source": "cadical-run-1"}
+{"idx": 44, "result": "UNSAT", "secs": 8.7, "source": "cadical-run-1"}
+{"idx": 45, "result": "UNSAT", "secs": 44.0, "source": "cadical-run-1"}
+{"idx": 46, "result": "UNSAT", "secs": 16.5, "source": "cadical-run-1"}
+{"idx": 47, "result": "UNSAT", "secs": 26.0, "source": "cadical-run-1"}
+{"idx": 48, "result": "UNSAT", "secs": 1.7, "source": "cadical-run-1"}
+{"idx": 49, "result": "UNSAT", "secs": 14.1, "source": "cadical-run-1"}
+{"idx": 50, "result": "UNSAT", "secs": 19.8, "source": "cadical-run-1"}
+{"idx": 51, "result": "UNSAT", "secs": 10.6, "source": "cadical-run-1"}
+{"idx": 52, "result": "UNSAT", "secs": 6.7, "source": "cadical-run-1"}
+{"idx": 53, "result": "UNSAT", "secs": 4.1, "source": "cadical-run-1"}
+{"idx": 54, "result": "UNSAT", "secs": 14.7, "source": "cadical-run-1"}
+{"idx": 55, "result": "UNSAT", "secs": 3.9, "source": "cadical-run-1"}
+{"idx": 56, "result": "UNSAT", "secs": 3.4, "source": "cadical-run-1"}
+{"idx": 57, "result": "UNSAT", "secs": 23.4, "source": "cadical-run-1"}
+{"idx": 58, "result": "UNSAT", "secs": 22.7, "source": "cadical-run-1"}
+{"idx": 59, "result": "UNSAT", "secs": 56.2, "source": "cadical-run-1"}
+{"idx": 60, "result": "UNSAT", "secs": 11.0, "source": "cadical-run-1"}
+{"idx": 61, "result": "UNSAT", "secs": 10.0, "source": "cadical-run-1"}
+{"idx": 62, "result": "UNSAT", "secs": 25.3, "source": "cadical-run-1"}
+{"idx": 63, "result": "UNSAT", "secs": 6.8, "source": "cadical-run-1"}
+{"idx": 64, "result": "UNSAT", "secs": 3.5, "source": "cadical-run-1"}
+{"idx": 65, "result": "UNSAT", "secs": 61.5, "source": "cadical-run-1"}
+{"idx": 66, "result": "UNSAT", "secs": 10.8, "source": "cadical-run-1"}
+{"idx": 72, "result": "UNSAT", "secs": 2.3, "source": "cadical-run-1"}
+{"idx": 73, "result": "UNSAT", "secs": 16.3, "source": "cadical-run-1"}
+{"idx": 74, "result": "UNSAT", "secs": 16.8, "source": "cadical-run-1"}
+{"idx": 75, "result": "UNSAT", "secs": 22.1, "source": "cadical-run-1"}
+{"idx": 76, "result": "UNSAT", "secs": 9.6, "source": "cadical-run-1"}
+{"idx": 77, "result": "UNSAT", "secs": 87.9, "source": "cadical-run-1"}
+{"idx": 78, "result": "UNSAT", "secs": 25.8, "source": "cadical-run-1"}
+{"idx": 79, "result": "UNSAT", "secs": 56.3, "source": "cadical-run-1"}
+{"idx": 80, "result": "UNSAT", "secs": 4.1, "source": "cadical-run-1"}
+{"idx": 81, "result": "UNSAT", "secs": 8.6, "source": "cadical-run-1"}
+{"idx": 82, "result": "UNSAT", "secs": 4.3, "source": "cadical-run-1"}
+{"idx": 83, "result": "UNSAT", "secs": 8.4, "source": "cadical-run-1"}
+{"idx": 84, "result": "UNSAT", "secs": 2.0, "source": "cadical-run-1"}
+{"idx": 90, "result": "UNSAT", "secs": 18.0, "source": "cadical-run-1"}
+{"idx": 91, "result": "UNSAT", "secs": 11.8, "source": "cadical-run-1"}
+{"idx": 92, "result": "UNSAT", "secs": 3.1, "source": "cadical-run-1"}
+{"idx": 93, "result": "UNSAT", "secs": 86.9, "source": "cadical-run-1"}
+{"idx": 94, "result": "UNSAT", "secs": 9.0, "source": "cadical-run-1"}
+{"idx": 95, "result": "UNSAT", "secs": 103.7, "source": "cadical-run-1"}
+{"idx": 96, "result": "UNSAT", "secs": 4.3, "source": "cadical-run-1"}
+{"idx": 97, "result": "UNSAT", "secs": 34.5, "source": "cadical-run-1"}
+{"idx": 98, "result": "UNSAT", "secs": 19.3, "source": "cadical-run-1"}
+{"idx": 108, "result": "UNSAT", "secs": 4.7, "source": "cadical-run-1"}
+{"idx": 109, "result": "UNSAT", "secs": 4.6, "source": "cadical-run-1"}
+{"idx": 110, "result": "UNSAT", "secs": 6.1, "source": "cadical-run-1"}
+{"idx": 111, "result": "UNSAT", "secs": 5.0, "source": "cadical-run-1"}
+{"idx": 112, "result": "UNSAT", "secs": 47.8, "source": "cadical-run-1"}
+{"idx": 113, "result": "UNSAT", "secs": 224.0, "source": "cadical-run-1"}
+{"idx": 126, "result": "UNSAT", "secs": 77.9, "source": "cadical-run-1"}
