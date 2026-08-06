@@ -1,0 +1,51 @@
+name: Exhaust all size-30 LR polynomials of dimensions 5-7
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  lowdim-exhaustive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Add exact exhaustive driver
+        run: |
+          mkdir -p source/src/bin
+          cat > source/src/bin/lowdim_exhaustive.rs <<'RS'
+          use std::fs::File;use std::io::{BufWriter,Write};
+          use lrcalc::schur::schur_product_expansion;use lrcalc::lr_ehrhart::{lr_stretch_dimension,lr_stretch_h_vector};use num_traits::{Zero,Signed};use num_rational::BigRational;
+          fn gp(n:i32,l:usize,m:i32,p:&mut Vec<i32>,o:&mut Vec<Vec<i32>>){if n==0{o.push(p.clone());return}if l==0{return}for x in(1..=m.min(n)).rev(){p.push(x);gp(n-x,l-1,x,p,o);p.pop();}}
+          fn parts(n:i32)->Vec<Vec<i32>>{let mut o=vec![];gp(n,7,n,&mut vec![],&mut o);o}fn fmt(p:&[i32])->String{p.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")}
+          fn main(){let mut by=vec![];for n in 0..=30{by.push(parts(n));}let mut support=0u64;let mut bydim=[0u64;8];let mut negatives=0u64;let mut closest:Vec<(BigRational,String)>=vec![];let mut neg=BufWriter::new(File::create("lowdim_negative.tsv").unwrap());
+            for a in 0usize..=15{let b=30-a;for l in&by[a]{for r in&by[b]{if a==b&&l>r{continue}let terms=match schur_product_expansion(l,r,7,-1){Ok(x)=>x,Err(_)=>continue};for t in terms{if t.coefficient<3||t.partition.len()>7{continue}support+=1;let d=match lr_stretch_dimension(&t.partition,l,r){Ok(Some(x))=>x,_=>continue};if d<5||d>7{continue}bydim[d]+=1;let p=match lr_stretch_h_vector(&t.partition,l,r){Ok(x)=>x,Err(_)=>continue};let mut any=false;for(k,c)in p.coefficients.iter().enumerate(){if c<&BigRational::zero(){any=true;writeln!(neg,"{}\t{}\t{}\t{}\t{}\t{}",fmt(&t.partition),fmt(l),fmt(r),d,k,c).unwrap();}}if any{negatives+=1;}let norm=p.coefficients.iter().fold(BigRational::zero(),|z,x|z+x.abs());if d>=5{for k in 1..=d-4{let q=p.coefficients[k].clone()/norm.clone();let line=format!("{}\t{}\t{}\t{}\t{}\t{}\t{}",fmt(&t.partition),fmt(l),fmt(r),d,t.coefficient,k,p.coefficients[k]);closest.push((q,line));}}if closest.len()>5000{closest.sort_by(|x,y|x.0.cmp(&y.0));closest.truncate(1000);}}}}}
+            closest.sort_by(|x,y|x.0.cmp(&y.0));closest.truncate(1000);let mut c=BufWriter::new(File::create("lowdim_closest.tsv").unwrap());for(q,s)in closest{writeln!(c,"{}\t{}",q,s).unwrap();}let mut z=BufWriter::new(File::create("lowdim_summary.json").unwrap());writeln!(z,"{{\"support\":{},\"dimension5\":{},\"dimension6\":{},\"dimension7\":{},\"negative_hits\":{}}}",support,bydim[5],bydim[6],bydim[7],negatives).unwrap();}
+          RS
+      - working-directory: source
+        run: cargo build --release --bin lowdim_exhaustive
+      - working-directory: source
+        run: ./target/release/lowdim_exhaustive
+      - name: Publish results
+        run: |
+          mkdir artifact
+          cp source/lowdim_* artifact/
+          cp source/src/bin/lowdim_exhaustive.rs artifact/
+          gzip -9 artifact/lowdim_closest.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS
+          gh release delete lr-lowdim-exhaustive-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-lowdim-exhaustive-v1 || true
+          gh release create lr-lowdim-exhaustive-v1 artifact/* --repo "$GITHUB_REPOSITORY" --title "Complete LR dimension 5-7 search" --notes "Exact exhaustive size-30 search."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-lr-lowdim-exhaustive
+          path: artifact/
+          retention-days: 1
