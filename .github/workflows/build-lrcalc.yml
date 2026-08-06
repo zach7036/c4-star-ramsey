@@ -1,0 +1,43 @@
+name: Build exact stretched-LR engine
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone lrcalc-rs
+        run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Build optimized binary
+        working-directory: source
+        run: cargo build --release --bin lrcalc
+      - name: Smoke test
+        working-directory: source
+        run: |
+          ./target/release/lrcalc --version
+          ./target/release/lrcalc lr-stretch-hvector 3 2 1 - 2 1 - 2 1
+      - name: Package
+        run: |
+          mkdir artifact
+          cp source/target/release/lrcalc artifact/lrcalc-rs-linux-x86_64
+          cp source/COPYING artifact/COPYING
+          tar --exclude=.git -czf artifact/lrcalc-rs-source.tar.gz -C source .
+          sha256sum artifact/lrcalc-rs-linux-x86_64 artifact/lrcalc-rs-source.tar.gz > artifact/SHA256SUMS
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: lrcalc-rs-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 1
