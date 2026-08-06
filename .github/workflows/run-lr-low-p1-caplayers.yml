@@ -1,0 +1,104 @@
+name: Exhaust sparse stretched-LR cap-layer families
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Add exact sparse-family driver
+        run: |
+          mkdir -p source/src/bin
+          cat > source/src/bin/low_p1_shard.rs <<'RS'
+          use std::env;use std::fs::File;use std::io::{BufWriter,Write};
+          use lrcalc::schur::schur_product_expansion;use lrcalc::lr_ehrhart::lr_stretch_h_vector;
+          use num_rational::BigRational;use num_traits::{Zero,Signed};
+          fn gp(n:i32,l:usize,m:i32,p:&mut Vec<i32>,o:&mut Vec<Vec<i32>>){if n==0{o.push(p.clone());return}if l==0{return}for x in(1..=m.min(n)).rev(){p.push(x);gp(n-x,l-1,x,p,o);p.pop();}}
+          fn ps(n:i32)->Vec<Vec<i32>>{let mut o=vec![];gp(n,7,n,&mut vec![],&mut o);o}fn f(p:&[i32])->String{p.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")}
+          fn mix(mut x:u64)->u64{x^=x>>33;x=x.wrapping_mul(0xff51afd7ed558ccd);x^=x>>33;x=x.wrapping_mul(0xc4ceb9fe1a85ec53);x^(x>>33)}
+          fn h(a:&[i32],b:&[i32],c:&[i32])->u64{let mut z=0xcbf29ce484222325;for p in[a,b,c]{for&x in p{z=mix(z^(x as u64+0x9e3779b97f4a7c15));}z=mix(z^255);}z}
+          fn main(){let shard:usize=env::var("SHARD").unwrap().parse().unwrap();let mut by=vec![];for n in 0..=30{by.push(ps(n));}
+            let mut support=0u64;let mut sparse=0u64;let mut assigned=0u64;let mut complete=0u64;let mut fail=0u64;let mut hits=0u64;let mut bydim=[0u64;16];
+            let mut neg=BufWriter::new(File::create(format!("low_p1_negative_{shard}.tsv")).unwrap());let mut err=BufWriter::new(File::create(format!("low_p1_errors_{shard}.tsv")).unwrap());let mut close:Vec<(BigRational,String)>=vec![];
+            for total in 24usize..=30{for a in 0usize..=total/2{let z=total-a;for l in&by[a]{for r in&by[z]{if a==z&&l>r{continue}let ts=match schur_product_expansion(l,r,7,-1){Ok(x)=>x,Err(_)=>continue};for t in ts{if t.partition.len()>7||t.coefficient<3{continue}support+=1;if t.coefficient>12{continue}sparse+=1;if h(&t.partition,l,r)%16!=shard as u64{continue}assigned+=1;
+              match lr_stretch_h_vector(&t.partition,l,r){Err(e)=>{fail+=1;writeln!(err,"{}\t{}\t{}\t{}\t{:?}",f(&t.partition),f(l),f(r),t.coefficient,e).unwrap();},Ok(p)=>{complete+=1;if p.dimension<16{bydim[p.dimension]+=1}let cs=p.coefficients.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");let hs=p.h_vector.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");let mut any=false;for(k,c)in p.coefficients.iter().enumerate(){if c<&BigRational::zero(){any=true;writeln!(neg,"{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",f(&t.partition),f(l),f(r),total,p.dimension,k,c,cs).unwrap();}}if any{hits+=1}let norm=p.coefficients.iter().fold(BigRational::zero(),|q,x|q+x.abs());if p.dimension>=5{for k in 1..=p.dimension-4{let q=p.coefficients[k].clone()/norm.clone();close.push((q,format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",f(&t.partition),f(l),f(r),total,p.dimension,t.coefficient,k,p.coefficients[k]));}}if close.len()>15000{close.sort_by(|x,y|x.0.cmp(&y.0));close.truncate(3000);}let _=hs;}}
+            }}}}}
+            close.sort_by(|x,y|x.0.cmp(&y.0));close.truncate(3000);let mut c=BufWriter::new(File::create(format!("low_p1_closest_{shard}.tsv")).unwrap());for(q,s)in close{writeln!(c,"{}\t{}",q,s).unwrap();}
+            let mut s=BufWriter::new(File::create(format!("low_p1_summary_{shard}.json")).unwrap());let dims=bydim.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");writeln!(s,"{{\"shard\":{},\"support\":{},\"sparse_global_seen\":{},\"assigned\":{},\"completed\":{},\"failed\":{},\"negative_hits\":{},\"dimensions\":[{}]}}",shard,support,sparse,assigned,complete,fail,hits,dims).unwrap();}
+          RS
+      - working-directory: source
+        run: cargo build --release --bin low_p1_shard
+      - name: Run shard
+        working-directory: source
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: ./target/release/low_p1_shard
+      - name: Package shard
+        run: |
+          mkdir artifact
+          cp source/low_p1_*_${{ matrix.shard }}.* artifact/
+          cp source/src/bin/low_p1_shard.rs artifact/
+          gzip -9 artifact/low_p1_closest_${{ matrix.shard }}.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS_${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: low-p1-shard-${{ matrix.shard }}
+          path: artifact/
+          retention-days: 1
+
+  combine:
+    if: always()
+    needs: shard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: low-p1-shard-*
+          path: shards
+          merge-multiple: true
+        continue-on-error: true
+      - name: Combine and publish
+        run: |
+          mkdir release
+          cp shards/low_p1_summary_*.json release/ 2>/dev/null || true
+          cat shards/low_p1_negative_*.tsv > release/low_p1_negative.tsv 2>/dev/null || true
+          cat shards/low_p1_errors_*.tsv > release/low_p1_errors.tsv 2>/dev/null || true
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          rows=[]
+          for p in Path('release').glob('low_p1_summary_*.json'):
+            try: rows.append(json.loads(p.read_text()))
+            except: pass
+          dims=[0]*16
+          for r in rows:
+            for i,x in enumerate(r.get('dimensions',[])):dims[i]+=x
+          out={'shards_received':len(rows),'sparse_global':max([x.get('sparse_global_seen',0) for x in rows] or [0]),'assigned':sum(x.get('assigned',0) for x in rows),'completed':sum(x.get('completed',0) for x in rows),'failed':sum(x.get('failed',0) for x in rows),'negative_hits':sum(x.get('negative_hits',0) for x in rows),'dimensions':dims}
+          Path('release/low_p1_combined_summary.json').write_text(json.dumps(out,indent=2))
+          PY
+          sha256sum release/* > release/SHA256SUMS
+          gh release delete lr-low-p1-caplayers-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-low-p1-caplayers-v1 || true
+          gh release create lr-low-p1-caplayers-v1 release/* --repo "$GITHUB_REPOSITORY" --title "Complete sparse stretched-LR cap-layer search" --notes "Exact 24–30 cap-layer census for 3 <= P(1) <= 12; determinant twists cover all smaller sizes."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-low-p1-caplayers
+          path: release/
+          retention-days: 1
