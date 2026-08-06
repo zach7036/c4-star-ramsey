@@ -1,0 +1,120 @@
+name: Build exact LR tight-signature engine
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build-signature-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone lrcalc-rs
+        run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+
+      - name: Expose cached tight signature and add batch binary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('source/src/lrcoef.rs')
+          s=p.read_text()
+          s=s.replace('pub(crate) struct LrBuchStretchCache', 'pub struct LrBuchStretchCache')
+          s=s.replace('pub(crate) fn lrcoef_buch_stretch_cache', 'pub fn lrcoef_buch_stretch_cache')
+          anchor='impl LrBuchStretchCache {'
+          if anchor not in s:
+              raise SystemExit('cache impl anchor not found')
+          method=r'''
+              pub fn exact_tight_signature(&self) -> String {
+                  fn bits(grid: &[Vec<bool>]) -> String {
+                      let mut out = String::new();
+                      for row in grid {
+                          for &value in row {
+                              out.push(if value { '1' } else { '0' });
+                          }
+                          out.push('/');
+                      }
+                      out
+                  }
+                  format!("L:{}|D:{}|Y:{}", bits(&self.tight.lower),
+                          bits(&self.tight.diagonal), bits(&self.tight.yamanouchi))
+              }
+
+              pub fn exact_dimension(&self) -> usize { self.dimension }
+          '''
+          s=s.replace(anchor,anchor+method,1)
+          p.write_text(s)
+          PY
+
+          mkdir -p source/src/bin
+          cat > source/src/bin/lr_signature_batch.rs <<'RS'
+          use std::io::{self, BufRead, Write};
+          use lrcalc::lrcoef::lrcoef_buch_stretch_cache;
+
+          fn parse(text: &str) -> Result<Vec<i32>, String> {
+              let text=text.trim();
+              if text.is_empty() || text=="0" || text=="-" { return Ok(Vec::new()); }
+              let mut p=Vec::new();
+              for t in text.split(',') {
+                  let v:i32=t.trim().parse().map_err(|_| format!("bad integer {t}"))?;
+                  if v<0 { return Err("negative part".into()); }
+                  p.push(v);
+              }
+              if p.windows(2).any(|w|w[0]<w[1]) { return Err("not a partition".into()); }
+              while p.last()==Some(&0) {p.pop();}
+              Ok(p)
+          }
+
+          fn main() {
+              let stdin=io::stdin();
+              let mut out=io::BufWriter::new(io::stdout().lock());
+              for raw in stdin.lock().lines() {
+                  let raw=match raw {Ok(x)=>x,Err(e)=>{let _=writeln!(out,"ERR\tio:{e}");continue;}};
+                  if raw.trim().is_empty() || raw.trim_start().starts_with('#') {continue;}
+                  let f:Vec<&str>=raw.split(';').collect();
+                  if f.len()!=3 {let _=writeln!(out,"ERR\tfields");continue;}
+                  let parsed=(||->Result<_,String>{Ok((parse(f[0])?,parse(f[1])?,parse(f[2])?))})();
+                  match parsed {
+                      Err(e)=>{let _=writeln!(out,"ERR\t{e}");}
+                      Ok((outer,inner,content))=>match lrcoef_buch_stretch_cache(&outer,&inner,&content) {
+                          Err(e)=>{let _=writeln!(out,"ERR\t{:?}",e);}
+                          Ok(None)=>{let _=writeln!(out,"ZERO");}
+                          Ok(Some(cache))=>{let _=writeln!(out,"OK\t{}\t{}",cache.exact_dimension(),cache.exact_tight_signature());}
+                      }
+                  }
+                  let _=out.flush();
+              }
+          }
+          RS
+
+      - name: Build
+        working-directory: source
+        run: cargo build --release --bin lr_signature_batch
+
+      - name: Smoke test
+        working-directory: source
+        run: printf '3,2,1;2,1;2,1\n' | ./target/release/lr_signature_batch | grep '^OK'
+
+      - name: Publish disposable release
+        run: |
+          mkdir artifact
+          cp source/target/release/lr_signature_batch artifact/lr-signature-batch-linux-x86_64
+          cp source/COPYING artifact/COPYING
+          sha256sum artifact/lr-signature-batch-linux-x86_64 > artifact/SHA256SUMS
+          gh release delete lrcalc-signature-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git tag -d lrcalc-signature-v1 || true
+          git push origin :refs/tags/lrcalc-signature-v1 || true
+          gh release create lrcalc-signature-v1 artifact/* --repo "$GITHUB_REPOSITORY" --title "Exact LR tight-signature engine" --notes "Disposable geometric-classification infrastructure."
+
+      - name: Retain artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lr-signature-batch-linux-x86_64
+          path: artifact/
+          retention-days: 1
