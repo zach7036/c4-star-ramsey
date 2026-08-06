@@ -1,0 +1,54 @@
+name: Publish exact stretched-LR batch engine v2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  publish-batch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Add batch command
+        run: |
+          mkdir -p source/src/bin
+          cat > source/src/bin/lr_batch.rs <<'RS'
+          use std::io::{self, BufRead, Write};
+          use lrcalc::lr_ehrhart::lr_stretch_h_vector;
+          fn parse(s:&str)->Result<Vec<i32>,String>{
+              let s=s.trim(); if s.is_empty()||s=="0"||s=="-" {return Ok(vec![])}
+              let mut p=vec![]; for x in s.split(','){let v:i32=x.trim().parse().map_err(|_|"parse".to_string())?;if v<0{return Err("negative".into())}p.push(v)}
+              if p.windows(2).any(|w|w[0]<w[1]){return Err("order".into())} while p.last()==Some(&0){p.pop();} Ok(p)
+          }
+          fn main(){let stdin=io::stdin();let mut out=io::BufWriter::new(io::stdout().lock());
+              for l in stdin.lock().lines(){let l=match l{Ok(x)=>x,Err(_)=>continue};let f:Vec<&str>=l.trim().split(';').collect();if f.len()!=3{let _=writeln!(out,"ERR\tfields");continue}
+                  let a=parse(f[0]);let b=parse(f[1]);let c=parse(f[2]);match(a,b,c){(Ok(a),Ok(b),Ok(c))=>match lr_stretch_h_vector(&a,&b,&c){
+                      Ok(p)=>{let h=p.h_vector.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");let q=p.coefficients.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");let s=p.sample_points.iter().map(|(x,y)|format!("{x}:{y}")).collect::<Vec<_>>().join(",");let _=writeln!(out,"OK\t{}\t{}\t{}\t{}",p.dimension,h,q,s)},
+                      Err(e)=>{let _=writeln!(out,"ERR\t{:?}",e)}},_=>{let _=writeln!(out,"ERR\tparse")}}let _=out.flush();}}
+          RS
+      - working-directory: source
+        run: cargo build --release --bin lr_batch
+      - working-directory: source
+        run: printf '3,2,1;2,1;2,1\n' | ./target/release/lr_batch | grep '^OK'
+      - name: Publish
+        run: |
+          mkdir artifact
+          cp source/target/release/lr_batch artifact/lr-stretch-batch-linux-x86_64
+          cp source/COPYING artifact/COPYING
+          sha256sum artifact/* > artifact/SHA256SUMS
+          gh release delete lrcalc-batch-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lrcalc-batch-v1 || true
+          gh release create lrcalc-batch-v1 artifact/* --repo "$GITHUB_REPOSITORY" --title "Exact stretched-LR batch engine" --notes "Disposable exact search binary."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-stretched-lr-batch-v2
+          path: artifact/
+          retention-days: 1
