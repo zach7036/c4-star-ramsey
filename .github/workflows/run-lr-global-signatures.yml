@@ -1,0 +1,92 @@
+name: Enumerate global stretched-LR geometric signatures
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  global-signatures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Expose exact cached signature
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('source/src/lrcoef.rs');s=p.read_text()
+          s=s.replace('pub(crate) struct LrBuchStretchCache','pub struct LrBuchStretchCache')
+          s=s.replace('pub(crate) fn lrcoef_buch_stretch_cache','pub fn lrcoef_buch_stretch_cache')
+          anchor='impl LrBuchStretchCache {'
+          if anchor not in s: raise SystemExit('anchor missing')
+          method=r'''
+              pub fn search_signature(&self) -> String {
+                  fn bits(g: &[Vec<bool>]) -> String { let mut s=String::new(); for r in g { for &x in r {s.push(if x {'1'} else {'0'});} s.push('/'); } s }
+                  format!("L:{}|D:{}|Y:{}",bits(&self.tight.lower),bits(&self.tight.diagonal),bits(&self.tight.yamanouchi))
+              }
+              pub fn search_dimension(&self) -> usize { self.dimension }
+          '''
+          s=s.replace(anchor,anchor+method,1);p.write_text(s)
+          PY
+          mkdir -p source/src/bin
+          cat > source/src/bin/global_signatures.rs <<'RS'
+          use std::collections::{BTreeMap,HashSet};
+          use std::fs::File;
+          use std::io::{BufWriter,Write};
+          use lrcalc::schur::schur_product_expansion;
+          use lrcalc::lrcoef::lrcoef_buch_stretch_cache;
+
+          #[derive(Clone)] struct Rec { outer:Vec<i32>,left:Vec<i32>,right:Vec<i32>,p1:u128,dim:usize,hash:u64 }
+          #[derive(Default)] struct Class {count:u64,min_p1:u128,max_p1:u128,recs:Vec<Rec>}
+          fn partitions(n:i32,max_len:usize,max_part:i32,prefix:&mut Vec<i32>,out:&mut Vec<Vec<i32>>) {
+              if n==0 {out.push(prefix.clone());return;} if max_len==0{return;}
+              let hi=max_part.min(n); for x in (1..=hi).rev(){prefix.push(x);partitions(n-x,max_len-1,x,prefix,out);prefix.pop();}
+          }
+          fn parts(n:i32)->Vec<Vec<i32>>{let mut o=vec![];partitions(n,7,n,&mut vec![],&mut o);o}
+          fn mix(mut x:u64)->u64{x^=x>>33;x=x.wrapping_mul(0xff51afd7ed558ccd);x^=x>>33;x=x.wrapping_mul(0xc4ceb9fe1a85ec53);x^(x>>33)}
+          fn hashrec(a:&[i32],b:&[i32],c:&[i32])->u64{let mut h=0xcbf29ce484222325u64;for p in [a,b,c]{for &x in p{h=mix(h^(x as u64+0x9e3779b97f4a7c15));}h=mix(h^0xff);}h}
+          fn fmt(p:&[i32])->String{p.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")}
+          fn main(){
+              let mut by_size=vec![];for n in 0..=30{by_size.push(parts(n));}
+              let mut classes:BTreeMap<String,Class>=BTreeMap::new();let mut total=0u64;let mut pairs=0u64;
+              for a in 0..=15 {let b=30-a;for (ip,left) in by_size[a as usize].iter().enumerate(){for right in &by_size[b as usize]{if a==b && left>right{continue;}pairs+=1;
+                  let terms=match schur_product_expansion(left,right,7,-1){Ok(x)=>x,Err(_)=>continue};
+                  for term in terms {if term.coefficient<3 || term.partition.len()>7{continue;}let cache=match lrcoef_buch_stretch_cache(&term.partition,left,right){Ok(Some(x))=>x,_=>continue};total+=1;
+                      let sig=format!("d{}|{}",cache.search_dimension(),cache.search_signature());let h=hashrec(&term.partition,left,right);let rec=Rec{outer:term.partition,left:left.clone(),right:right.clone(),p1:term.coefficient,dim:cache.search_dimension(),hash:h};
+                      let c=classes.entry(sig).or_default();c.count+=1;if c.count==1{c.min_p1=rec.p1;c.max_p1=rec.p1;}else{c.min_p1=c.min_p1.min(rec.p1);c.max_p1=c.max_p1.max(rec.p1);}
+                      c.recs.push(rec);c.recs.sort_by_key(|r|(r.p1,r.hash));if c.recs.len()>160{let mut keep=vec![];keep.extend(c.recs.iter().take(40).cloned());let mut hi=c.recs.clone();hi.sort_by_key(|r|(std::cmp::Reverse(r.p1),r.hash));keep.extend(hi.into_iter().take(40));let mut rnd=c.recs.clone();rnd.sort_by_key(|r|r.hash);keep.extend(rnd.into_iter().take(80));let mut seen=HashSet::new();keep.retain(|r|seen.insert((r.outer.clone(),r.left.clone(),r.right.clone())));c.recs=keep;}
+                  }
+              }}}
+              let file=File::create("global_signature_representatives.tsv").unwrap();let mut w=BufWriter::new(file);writeln!(w,"signature\tclass_count\tmin_p1\tmax_p1\touter\tleft\tright\tp1\tdimension").unwrap();
+              for (sig,c) in &classes {for r in &c.recs {writeln!(w,"{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",sig,c.count,c.min_p1,c.max_p1,fmt(&r.outer),fmt(&r.left),fmt(&r.right),r.p1,r.dim).unwrap();}}
+              let mut s=BufWriter::new(File::create("global_signature_summary.json").unwrap());writeln!(s,"{{\"pairs\":{},\"candidates\":{},\"classes\":{},\"representatives\":{}}}",pairs,total,classes.len(),classes.values().map(|x|x.recs.len()).sum::<usize>()).unwrap();
+          }
+          RS
+      - working-directory: source
+        run: cargo build --release --bin global_signatures
+      - name: Run complete size-30 support classification
+        working-directory: source
+        run: ./target/release/global_signatures
+      - name: Package and publish
+        run: |
+          mkdir artifact
+          cp source/global_signature_representatives.tsv source/global_signature_summary.json artifact/
+          cp source/src/bin/global_signatures.rs artifact/
+          gzip -9 artifact/global_signature_representatives.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS
+          gh release delete lr-global-signatures-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-global-signatures-v1 || true
+          gh release create lr-global-signatures-v1 artifact/* --repo "$GITHUB_REPOSITORY" --title "Global exact LR geometric signatures" --notes "Complete size-30 support classification; search data only."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: global-lr-signatures
+          path: artifact/
+          retention-days: 1
