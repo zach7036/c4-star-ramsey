@@ -1,0 +1,119 @@
+name: Sharded exhaustive size-30 LR dimension-9 search
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Add exact sharded dimension-9 driver
+        run: |
+          mkdir -p source/src/bin
+          cat > source/src/bin/dim9_shard.rs <<'RS'
+          use std::env;use std::fs::File;use std::io::{BufWriter,Write};
+          use lrcalc::schur::schur_product_expansion;
+          use lrcalc::lr_ehrhart::{lr_stretch_dimension,lr_stretch_h_vector};
+          use num_rational::BigRational;use num_traits::{Zero,Signed};
+          fn gp(n:i32,l:usize,m:i32,p:&mut Vec<i32>,o:&mut Vec<Vec<i32>>){if n==0{o.push(p.clone());return}if l==0{return}for x in(1..=m.min(n)).rev(){p.push(x);gp(n-x,l-1,x,p,o);p.pop();}}
+          fn ps(n:i32)->Vec<Vec<i32>>{let mut o=vec![];gp(n,7,n,&mut vec![],&mut o);o}
+          fn fmt(p:&[i32])->String{p.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")}
+          fn mix(mut x:u64)->u64{x^=x>>33;x=x.wrapping_mul(0xff51afd7ed558ccd);x^=x>>33;x=x.wrapping_mul(0xc4ceb9fe1a85ec53);x^(x>>33)}
+          fn hash(a:&[i32],b:&[i32],c:&[i32])->u64{let mut h=0xcbf29ce484222325;for p in[a,b,c]{for&x in p{h=mix(h^(x as u64+0x9e3779b97f4a7c15));}h=mix(h^255);}h}
+          fn main(){let shard:usize=env::var("SHARD").unwrap().parse().unwrap();let nshard=8u64;let mut b=vec![];for n in 0..=30{b.push(ps(n));}
+            let mut support=0u64;let mut d9=0u64;let mut assigned=0u64;let mut complete=0u64;let mut failed=0u64;let mut hits=0u64;
+            let mut neg=BufWriter::new(File::create(format!("dim9_negative_{shard}.tsv")).unwrap());
+            let mut err=BufWriter::new(File::create(format!("dim9_errors_{shard}.tsv")).unwrap());
+            let mut closest:Vec<(BigRational,String)>=vec![];
+            for a in 0usize..=15{let z=30-a;for l in&b[a]{for r in&b[z]{if a==z&&l>r{continue}
+              let ts=match schur_product_expansion(l,r,7,-1){Ok(x)=>x,Err(_)=>continue};
+              for t in ts{if t.coefficient<3||t.partition.len()>7{continue}support+=1;
+                let d=match lr_stretch_dimension(&t.partition,l,r){Ok(Some(x))=>x,_=>continue};if d!=9{continue}d9+=1;
+                if hash(&t.partition,l,r)%nshard != shard as u64{continue}assigned+=1;
+                match lr_stretch_h_vector(&t.partition,l,r){
+                  Err(e)=>{failed+=1;writeln!(err,"{}\t{}\t{}\t{:?}",fmt(&t.partition),fmt(l),fmt(r),e).unwrap();}
+                  Ok(p)=>{complete+=1;let cs=p.coefficients.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");let hs=p.h_vector.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",");let mut any=false;
+                    for(k,c)in p.coefficients.iter().enumerate(){if c<&BigRational::zero(){any=true;writeln!(neg,"{}\t{}\t{}\t{}\t{}\t{}",fmt(&t.partition),fmt(l),fmt(r),k,c,cs).unwrap();}}
+                    if any{hits+=1}
+                    let norm=p.coefficients.iter().fold(BigRational::zero(),|q,x|q+x.abs());for k in 1..=5{let q=p.coefficients[k].clone()/norm.clone();closest.push((q,format!("{}\t{}\t{}\t{}\t{}\t{}",fmt(&t.partition),fmt(l),fmt(r),t.coefficient,k,p.coefficients[k]));}
+                    if closest.len()>10000{closest.sort_by(|x,y|x.0.cmp(&y.0));closest.truncate(2000);}
+                    let _=hs;
+                  }
+                }
+              }
+            }}}
+            closest.sort_by(|x,y|x.0.cmp(&y.0));closest.truncate(2000);let mut c=BufWriter::new(File::create(format!("dim9_closest_{shard}.tsv")).unwrap());for(q,s)in closest{writeln!(c,"{}\t{}",q,s).unwrap();}
+            let mut s=BufWriter::new(File::create(format!("dim9_summary_{shard}.json")).unwrap());writeln!(s,"{{\"shard\":{},\"support\":{},\"dimension9_global_seen\":{},\"assigned\":{},\"completed\":{},\"failed\":{},\"negative_hits\":{}}}",shard,support,d9,assigned,complete,failed,hits).unwrap();
+          }
+          RS
+      - working-directory: source
+        run: cargo build --release --bin dim9_shard
+      - name: Run shard
+        working-directory: source
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: ./target/release/dim9_shard
+      - name: Package shard
+        run: |
+          mkdir artifact
+          cp source/dim9_*_${{ matrix.shard }}.* artifact/
+          cp source/src/bin/dim9_shard.rs artifact/
+          gzip -9 artifact/dim9_closest_${{ matrix.shard }}.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS_${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dim9-shard-${{ matrix.shard }}
+          path: artifact/
+          retention-days: 1
+
+  combine:
+    if: always()
+    needs: shard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dim9-shard-*
+          path: shards
+          merge-multiple: true
+      - name: Combine and publish exact records
+        run: |
+          mkdir release
+          cp shards/dim9_summary_*.json release/ || true
+          cat shards/dim9_negative_*.tsv > release/dim9_negative.tsv || true
+          cat shards/dim9_errors_*.tsv > release/dim9_errors.tsv || true
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          rows=[]
+          for p in Path('release').glob('dim9_summary_*.json'):
+              try: rows.append(json.loads(p.read_text()))
+              except: pass
+          out={'shards_received':len(rows),'assigned':sum(x.get('assigned',0) for x in rows),'completed':sum(x.get('completed',0) for x in rows),'failed':sum(x.get('failed',0) for x in rows),'negative_hits':sum(x.get('negative_hits',0) for x in rows),'dimension9_global':max([x.get('dimension9_global_seen',0) for x in rows] or [0])}
+          Path('release/dim9_combined_summary.json').write_text(json.dumps(out,indent=2))
+          PY
+          sha256sum release/* > release/SHA256SUMS
+          gh release delete lr-dim9-exhaustive-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-dim9-exhaustive-v1 || true
+          gh release create lr-dim9-exhaustive-v1 release/* --repo "$GITHUB_REPOSITORY" --title "Sharded complete LR dimension-9 search" --notes "Exact size-30 dimension-9 census; hard cases are listed separately."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-lr-dim9-combined
+          path: release/
+          retention-days: 1
