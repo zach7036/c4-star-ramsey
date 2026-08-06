@@ -1,0 +1,75 @@
+name: Run exact global LR class-guided search
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  class-guided:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Add exact class-guided search
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('source/src/lrcoef.rs');s=p.read_text();s=s.replace('pub(crate) struct LrBuchStretchCache','pub struct LrBuchStretchCache');s=s.replace('pub(crate) fn lrcoef_buch_stretch_cache','pub fn lrcoef_buch_stretch_cache');a='impl LrBuchStretchCache {'
+          if a not in s:raise SystemExit('anchor')
+          m=r'''
+              pub fn search_signature(&self) -> String { fn b(g:&[Vec<bool>])->String{let mut s=String::new();for r in g{for &x in r{s.push(if x{'1'}else{'0'});}s.push('/');}s}format!("L:{}|D:{}|Y:{}",b(&self.tight.lower),b(&self.tight.diagonal),b(&self.tight.yamanouchi)) }
+              pub fn search_dimension(&self)->usize{self.dimension}
+          '''
+          p.write_text(s.replace(a,a+m,1))
+          PY
+          mkdir -p source/src/bin
+          cat > source/src/bin/class_guided.rs <<'RS'
+          use std::collections::{BTreeMap,BTreeSet,HashSet};use std::fs::File;use std::io::{BufWriter,Write};
+          use lrcalc::schur::schur_product_expansion;use lrcalc::lrcoef::lrcoef_buch_stretch_cache;use lrcalc::lr_ehrhart::lr_stretch_h_vector;
+          use num_rational::BigRational;use num_traits::{Zero,Signed};
+          #[derive(Clone)]struct R{outer:Vec<i32>,left:Vec<i32>,right:Vec<i32>,p1:u128,hash:u64}
+          #[derive(Default)]struct C{count:u64,reps:Vec<R>}
+          fn gp(n:i32,l:usize,m:i32,p:&mut Vec<i32>,o:&mut Vec<Vec<i32>>){if n==0{o.push(p.clone());return}if l==0{return}for x in(1..=m.min(n)).rev(){p.push(x);gp(n-x,l-1,x,p,o);p.pop();}}
+          fn parts(n:i32)->Vec<Vec<i32>>{let mut o=vec![];gp(n,7,n,&mut vec![],&mut o);o}
+          fn mix(mut x:u64)->u64{x^=x>>33;x=x.wrapping_mul(0xff51afd7ed558ccd);x^=x>>33;x=x.wrapping_mul(0xc4ceb9fe1a85ec53);x^(x>>33)}
+          fn hr(a:&[i32],b:&[i32],c:&[i32])->u64{let mut h=7;for p in[a,b,c]{for&x in p{h=mix(h^(x as u64+0x9e3779b97f4a7c15));}h=mix(h^255);}h}
+          fn fmt(p:&[i32])->String{p.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")}
+          fn score(r:&R)->Option<(BigRational,usize,Vec<BigRational>)>{let p=lr_stretch_h_vector(&r.outer,&r.left,&r.right).ok()?;if p.dimension<5{return None}let end=p.dimension-4;let mut best:Option<(BigRational,usize)>=None;let norm=p.coefficients.iter().fold(BigRational::zero(),|a,x|a+x.abs());for k in 1..=end{let q=p.coefficients[k].clone()/norm.clone();if best.as_ref().map_or(true,|x|q<x.0){best=Some((q,k));}}let(b,k)=best?;Some((b,k,p.coefficients))}
+          fn enumerate<F:FnMut(Vec<i32>,Vec<i32>,Vec<i32>,u128,String)>(by:&[Vec<Vec<i32>>],mut f:F){for a in 0..=15{let b=30-a;for l in&by[a]{for r in&by[b as usize]{if a==b as usize&&l>r{continue}let ts=match schur_product_expansion(l,r,7,-1){Ok(x)=>x,Err(_)=>continue};for t in ts{if t.coefficient<3||t.partition.len()>7{continue}let c=match lrcoef_buch_stretch_cache(&t.partition,l,r){Ok(Some(x))=>x,_=>continue};let s=format!("d{}|{}",c.search_dimension(),c.search_signature());f(t.partition,l.clone(),r.clone(),t.coefficient,s);}}}}
+          fn main(){let mut by=vec![];for n in 0..=30{by.push(parts(n));}let mut cls:BTreeMap<String,C>=BTreeMap::new();let mut total=0u64;
+            enumerate(&by,|o,l,r,p1,s|{total+=1;let rec=R{hash:hr(&o,&l,&r),outer:o,left:l,right:r,p1};let c=cls.entry(s).or_default();c.count+=1;c.reps.push(rec);c.reps.sort_by_key(|x|(x.p1,x.hash));if c.reps.len()>120{let mut q=vec![];q.extend(c.reps.iter().take(30).cloned());let mut hi=c.reps.clone();hi.sort_by_key(|x|(std::cmp::Reverse(x.p1),x.hash));q.extend(hi.into_iter().take(30));let mut rnd=c.reps.clone();rnd.sort_by_key(|x|x.hash);q.extend(rnd.into_iter().take(60));let mut u=HashSet::new();q.retain(|x|u.insert((x.outer.clone(),x.left.clone(),x.right.clone())));c.reps=q;}});
+            let mut ranked:Vec<(BigRational,String,R,usize,Vec<BigRational>)>=vec![];let mut tested=0u64;let mut negatives=vec![];
+            for(s,c)in&cls{for r in&c.reps{if let Some((z,k,co))=score(r){tested+=1;if co.iter().any(|x|x< &BigRational::zero()){negatives.push((s.clone(),r.clone(),co.clone()));}ranked.push((z,s.clone(),r.clone(),k,co));}}}
+            ranked.sort_by(|a,b|a.0.cmp(&b.0));let targets:BTreeSet<String>=ranked.iter().take(30).map(|x|x.1.clone()).collect();
+            let mut out=BufWriter::new(File::create("class_guided_results.tsv").unwrap());writeln!(out,"phase\tsignature\touter\tleft\tright\tp1\tmin_relative\tpower\tcoefficients").unwrap();for(z,s,r,k,co)in ranked.iter().take(1000){writeln!(out,"representative\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",s,fmt(&r.outer),fmt(&r.left),fmt(&r.right),r.p1,z,k,co.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")).unwrap();}
+            let mut second=0u64;enumerate(&by,|o,l,r,p1,s|{if !targets.contains(&s){return}let rec=R{hash:0,outer:o,left:l,right:r,p1};if let Some((z,k,co))=score(&rec){second+=1;if co.iter().any(|x|x<&BigRational::zero()){negatives.push((s.clone(),rec.clone(),co.clone()));}if z<BigRational::new(1.into(),1000.into()){writeln!(out,"target\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",s,fmt(&rec.outer),fmt(&rec.left),fmt(&rec.right),p1,z,k,co.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")).unwrap();}}});
+            let mut neg=BufWriter::new(File::create("class_guided_negative.tsv").unwrap());for(s,r,co)in&negatives{writeln!(neg,"{}\t{}\t{}\t{}\t{}",s,fmt(&r.outer),fmt(&r.left),fmt(&r.right),co.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")).unwrap();}
+            let mut sum=BufWriter::new(File::create("class_guided_summary.json").unwrap());writeln!(sum,"{{\"support\":{},\"classes\":{},\"representatives_tested\":{},\"target_classes\":{},\"target_candidates_tested\":{},\"negative_hits\":{}}}",total,cls.len(),tested,targets.len(),second,negatives.len()).unwrap();}
+          RS
+      - working-directory: source
+        run: cargo build --release --bin class_guided
+      - working-directory: source
+        run: ./target/release/class_guided
+      - name: Publish results
+        run: |
+          mkdir artifact
+          cp source/class_guided_* artifact/
+          cp source/src/bin/class_guided.rs artifact/
+          gzip -9 artifact/class_guided_results.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS
+          gh release delete lr-class-guided-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-class-guided-v1 || true
+          gh release create lr-class-guided-v1 artifact/* --repo "$GITHUB_REPOSITORY" --title "Exact global LR class-guided search" --notes "Global size-30 exact class-guided certificate search."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-global-lr-class-search
+          path: artifact/
+          retention-days: 1
