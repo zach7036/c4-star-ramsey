@@ -1,0 +1,104 @@
+name: Exact evolutionary stretched-LR search
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  evolve:
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        seed: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Add exact evolutionary driver
+        run: |
+          mkdir -p source/src/bin
+          cat > source/src/bin/exact_evolve.rs <<'RS'
+          use std::cmp::Ordering;use std::collections::HashSet;use std::env;use std::fs::File;use std::io::{BufWriter,Write};use std::time::{Duration,Instant};
+          use lrcalc::schur::schur_product_expansion;use lrcalc::lr_ehrhart::lr_stretch_h_vector;use num_rational::BigRational;use num_traits::{Zero,Signed};
+          #[derive(Clone,Eq,PartialEq,Hash)]struct T{outer:Vec<i32>,left:Vec<i32>,right:Vec<i32>}
+          #[derive(Clone)]struct E{t:T,score:BigRational,coeff:BigRational,power:usize,dim:usize,p1:u128,h:Vec<String>,c:Vec<String>}
+          struct R{state:u64}impl R{fn new(x:u64)->Self{Self{state:x^0x9e3779b97f4a7c15}}fn u(&mut self)->u64{let mut x=self.state;x^=x<<13;x^=x>>7;x^=x<<17;self.state=x;x}fn n(&mut self,n:usize)->usize{if n==0{0}else{(self.u()%(n as u64))as usize}}}
+          fn gp(n:i32,l:usize,m:i32,p:&mut Vec<i32>,o:&mut Vec<Vec<i32>>){if n==0{o.push(p.clone());return}if l==0{return}for x in(1..=m.min(n)).rev(){p.push(x);gp(n-x,l-1,x,p,o);p.pop();}}
+          fn parts(n:i32)->Vec<Vec<i32>>{let mut o=vec![];gp(n,7,n,&mut vec![],&mut o);o}fn fmt(p:&[i32])->String{p.iter().map(|x|x.to_string()).collect::<Vec<_>>().join(",")}
+          fn normalize(mut p:Vec<i32>)->Option<Vec<i32>>{p.retain(|&x|x>0);p.sort_by(|a,b|b.cmp(a));if p.len()<=7{Some(p)}else{None}}
+          fn internal(p:&[i32],r:&mut R)->Vec<i32>{let mut q=p.to_vec();if q.len()<7{q.push(0)}let positive:Vec<usize>=q.iter().enumerate().filter(|x|*x.1>0).map(|x|x.0).collect();if positive.is_empty(){return p.to_vec()}let i=positive[r.n(positive.len())];let mut j=r.n(q.len());if j==i{j=(j+1)%q.len()}q[i]-=1;q[j]+=1;normalize(q).unwrap_or_else(||p.to_vec())}
+          fn transfer(a:&[i32],b:&[i32],r:&mut R)->(Vec<i32>,Vec<i32>){let swap=r.n(2)==1;let(mut x,mut y)=if swap{(b.to_vec(),a.to_vec())}else{(a.to_vec(),b.to_vec())};if y.len()<7{y.push(0)}let pos:Vec<usize>=x.iter().enumerate().filter(|z|*z.1>0).map(|z|z.0).collect();if pos.is_empty(){return(a.to_vec(),b.to_vec())}let i=pos[r.n(pos.len())];let j=r.n(y.len());x[i]-=1;y[j]+=1;let x=normalize(x).unwrap();let y=normalize(y).unwrap();if swap{(y,x)}else{(x,y)}}
+          fn score(t:&T)->Option<E>{let p=lr_stretch_h_vector(&t.outer,&t.left,&t.right).ok()?;if p.dimension<3{return None}let end=if p.dimension>=5{p.dimension-4}else{p.dimension-1};if end<1{return None}let norm=p.coefficients.iter().fold(BigRational::zero(),|z,x|z+x.abs());if norm.is_zero(){return None}let mut best:Option<(BigRational,BigRational,usize)>=None;for k in 1..=end{let q=p.coefficients[k].clone()/norm.clone();if best.as_ref().map_or(true,|x|q<x.0){best=Some((q,p.coefficients[k].clone(),k));}}let(q,c,k)=best?;let p1=p.sample_points.iter().find(|x|x.0==1).and_then(|x|x.1.to_string().parse::<u128>().ok()).unwrap_or(0);Some(E{t:t.clone(),score:q,coeff:c,power:k,dim:p.dimension,p1,h:p.h_vector.iter().map(|x|x.to_string()).collect(),c:p.coefficients.iter().map(|x|x.to_string()).collect()})}
+          fn random_term(by:&[Vec<Vec<i32>>],r:&mut R)->Option<T>{for _ in 0..100{let total=24+r.n(7);let a=1+r.n(total-1);let l=by[a][r.n(by[a].len())].clone();let rr=by[total-a][r.n(by[total-a].len())].clone();let terms=schur_product_expansion(&l,&rr,7,-1).ok()?;let good:Vec<_>=terms.into_iter().filter(|x|x.coefficient>=3&&x.partition.len()<=7).collect();if !good.is_empty(){let t=&good[r.n(good.len())];return Some(T{outer:t.partition.clone(),left:l,right:rr})}}None}
+          fn mutate(t:&T,r:&mut R)->T{match r.n(5){0=>T{outer:internal(&t.outer,r),left:t.left.clone(),right:t.right.clone()},1=>T{outer:t.outer.clone(),left:internal(&t.left,r),right:t.right.clone()},2=>T{outer:t.outer.clone(),left:t.left.clone(),right:internal(&t.right,r)},_=>{let(l,rr)=transfer(&t.left,&t.right,r);T{outer:t.outer.clone(),left:l,right:rr}}}}
+          fn main(){let seed:u64=env::var("SEED").unwrap().parse().unwrap();let mut r=R::new(seed+20260806);let mut by=vec![];for n in 0..=30{by.push(parts(n));}let start=Instant::now();let limit=Duration::from_secs(5*3600);let mut seen=HashSet::new();let mut beam:Vec<E>=vec![];let mut evaluated=0u64;let mut failures=0u64;let mut hits=vec![];
+            while beam.len()<100&&start.elapsed()<Duration::from_secs(1800){if let Some(t)=random_term(&by,&mut r){if seen.insert(t.clone()){match score(&t){Some(e)=>{evaluated+=1;if e.coeff<BigRational::zero(){hits.push(e.clone())}beam.push(e)},None=>failures+=1}}}}
+            for _gen in 0..1000{if start.elapsed()>limit||!hits.is_empty(){break}beam.sort_by(|a,b|a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));beam.truncate(200);let parents=beam.clone();let mut next=beam.clone();for _ in 0..1200{if start.elapsed()>limit{break}let t=if r.n(5)==0{match random_term(&by,&mut r){Some(x)=>x,None=>continue}}else{mutate(&parents[r.n(parents.len())].t,&mut r)};if t.outer.iter().sum::<i32>()!=t.left.iter().sum::<i32>()+t.right.iter().sum::<i32>()||t.outer.iter().sum::<i32>()>30||!seen.insert(t.clone()){continue}match score(&t){Some(e)=>{evaluated+=1;if e.coeff<BigRational::zero(){hits.push(e.clone());break}next.push(e)},None=>failures+=1}}
+              next.sort_by(|a,b|a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));next.truncate(300);beam=next;
+            }
+            beam.sort_by(|a,b|a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));let mut top=BufWriter::new(File::create(format!("evolve_top_{seed}.tsv")).unwrap());for e in beam.iter().take(500){writeln!(top,"{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",e.score,e.coeff,e.power,e.dim,e.p1,fmt(&e.t.outer),fmt(&e.t.left),fmt(&e.t.right),e.c.join(",")).unwrap();}let mut hit=BufWriter::new(File::create(format!("evolve_negative_{seed}.tsv")).unwrap());for e in&hits{writeln!(hit,"{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",fmt(&e.t.outer),fmt(&e.t.left),fmt(&e.t.right),e.dim,e.power,e.coeff,e.h.join(","),e.c.join(",")).unwrap();}let mut s=BufWriter::new(File::create(format!("evolve_summary_{seed}.json")).unwrap());writeln!(s,"{{\"seed\":{},\"evaluated\":{},\"failures\":{},\"negative_hits\":{},\"elapsed_seconds\":{}}}",seed,evaluated,failures,hits.len(),start.elapsed().as_secs()).unwrap();}
+          RS
+      - working-directory: source
+        run: cargo build --release --bin exact_evolve
+      - name: Run exact evolution
+        working-directory: source
+        env:
+          SEED: ${{ matrix.seed }}
+        run: ./target/release/exact_evolve
+      - name: Package seed
+        run: |
+          mkdir artifact
+          cp source/evolve_*_${{ matrix.seed }}.* artifact/
+          cp source/src/bin/exact_evolve.rs artifact/
+          gzip -9 artifact/evolve_top_${{ matrix.seed }}.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS_${{ matrix.seed }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evolve-seed-${{ matrix.seed }}
+          path: artifact/
+          retention-days: 1
+
+  combine:
+    if: always()
+    needs: evolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: evolve-seed-*
+          path: seeds
+          merge-multiple: true
+        continue-on-error: true
+      - name: Combine and publish
+        run: |
+          mkdir release
+          cp seeds/evolve_summary_*.json release/ 2>/dev/null || true
+          cat seeds/evolve_negative_*.tsv > release/evolve_negative.tsv 2>/dev/null || true
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          rows=[]
+          for p in Path('release').glob('evolve_summary_*.json'):
+            try:rows.append(json.loads(p.read_text()))
+            except:pass
+          out={'seeds_received':len(rows),'evaluated':sum(x.get('evaluated',0) for x in rows),'failures':sum(x.get('failures',0) for x in rows),'negative_hits':sum(x.get('negative_hits',0) for x in rows)}
+          Path('release/evolve_combined_summary.json').write_text(json.dumps(out,indent=2))
+          PY
+          sha256sum release/* > release/SHA256SUMS
+          gh release delete lr-exact-evolution-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-exact-evolution-v1 || true
+          gh release create lr-exact-evolution-v1 release/* --repo "$GITHUB_REPOSITORY" --title "Exact evolutionary stretched-LR search" --notes "Independent exact 24–30 search; candidate coefficients are not accepted without replay."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-evolution-combined
+          path: release/
+          retention-days: 1
