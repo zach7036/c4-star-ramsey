@@ -19,8 +19,23 @@ jobs:
     steps:
       - name: Clone lrcalc-rs
         run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
-      - name: Add persistent batch driver
+      - name: Expose cached stretch-count API and add batch drivers
         run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('source/src/lrcoef.rs')
+          s=p.read_text()
+          replacements={
+            'pub(crate) struct LrBuchStretchCache':'pub struct LrBuchStretchCache',
+            'pub(crate) fn lrcoef_buch_stretch_cache':'pub fn lrcoef_buch_stretch_cache',
+            'pub(crate) fn lrcoef_buch_stretched_counts_u128':'pub fn lrcoef_buch_stretched_counts_u128',
+            'impl LrBuchStretchCache {\n    pub(crate) fn dimension':'impl LrBuchStretchCache {\n    pub fn dimension',
+          }
+          for old,new in replacements.items():
+              if old not in s: raise SystemExit(f'missing patch anchor: {old}')
+              s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
           mkdir -p source/src/bin
           cat > source/src/bin/lr_batch.rs <<'RS'
           use lrcalc::lr_ehrhart::{lr_stretch_dimension, lr_stretch_h_vector};
@@ -28,77 +43,83 @@ jobs:
 
           fn parse_partition(text: &str) -> Result<Vec<i32>, String> {
               let text = text.trim();
-              if text.is_empty() || text == "0" {
-                  return Ok(Vec::new());
-              }
-              text.split(',')
-                  .filter(|piece| !piece.trim().is_empty())
-                  .map(|piece| piece.trim().parse::<i32>().map_err(|_| format!("bad integer {piece}")))
-                  .collect()
+              if text.is_empty() || text == "0" { return Ok(Vec::new()); }
+              text.split(',').filter(|piece| !piece.trim().is_empty())
+                  .map(|piece| piece.trim().parse::<i32>().map_err(|_| format!("bad integer {piece}"))).collect()
           }
-
+          fn parse_triple(payload: &str) -> Result<[Vec<i32>;3], String> {
+              let fields:Vec<&str>=payload.split(';').collect();
+              if fields.len()!=3 { return Err("expected outer;inner;content".into()); }
+              Ok([parse_partition(fields[0])?,parse_partition(fields[1])?,parse_partition(fields[2])?])
+          }
           fn main() {
-              let stdin = io::stdin();
+              let stdin=io::stdin();
               for line in stdin.lock().lines() {
-                  let Ok(line) = line else { continue };
-                  let line = line.trim();
-                  if line.is_empty() || line.starts_with('#') { continue; }
-                  let (dimension_only, payload) = match line.strip_prefix("D\t") {
-                      Some(rest) => (true, rest),
-                      None => (false, line),
-                  };
-                  let fields: Vec<&str> = payload.split(';').collect();
-                  if fields.len() != 3 {
-                      println!("ERR\texpected outer;inner;content\t{payload}");
-                      continue;
-                  }
-                  let parsed = (|| -> Result<[Vec<i32>; 3], String> {
-                      Ok([
-                          parse_partition(fields[0])?,
-                          parse_partition(fields[1])?,
-                          parse_partition(fields[2])?,
-                      ])
-                  })();
-                  let Ok(parts) = parsed else {
-                      println!("ERR\tparse\t{payload}");
-                      continue;
-                  };
+                  let Ok(line)=line else {continue}; let line=line.trim();
+                  if line.is_empty()||line.starts_with('#'){continue}
+                  let (dimension_only,payload)=match line.strip_prefix("D\t"){Some(rest)=>(true,rest),None=>(false,line)};
+                  let Ok(parts)=parse_triple(payload) else {println!("ERR\tparse\t{payload}");continue};
                   if dimension_only {
-                      match lr_stretch_dimension(&parts[0], &parts[1], &parts[2]) {
-                          Ok(Some(dimension)) => println!("DIM\t{}\t{}", dimension, payload),
-                          Ok(None) => println!("EMPTY\t{}", payload),
-                          Err(err) => println!("ERR\t{:?}\t{}", err, payload),
-                      }
+                      match lr_stretch_dimension(&parts[0],&parts[1],&parts[2]) {
+                          Ok(Some(d))=>println!("DIM\t{}\t{}",d,payload), Ok(None)=>println!("EMPTY\t{}",payload),
+                          Err(err)=>println!("ERR\t{:?}\t{}",err,payload), }
                       continue;
                   }
-                  match lr_stretch_h_vector(&parts[0], &parts[1], &parts[2]) {
-                      Ok(poly) => {
-                          let h = poly.h_vector.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
-                          let pts = poly.sample_points.iter().map(|(x,y)| format!("{x}:{y}")).collect::<Vec<_>>().join(",");
-                          println!("OK\t{}\t{}\t{}\t{}", poly.dimension, h, pts, payload);
+                  match lr_stretch_h_vector(&parts[0],&parts[1],&parts[2]) {
+                      Ok(poly)=>{
+                          let h=poly.h_vector.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
+                          let pts=poly.sample_points.iter().map(|(x,y)|format!("{x}:{y}")).collect::<Vec<_>>().join(",");
+                          println!("OK\t{}\t{}\t{}\t{}",poly.dimension,h,pts,payload);
                       }
-                      Err(err) => println!("ERR\t{:?}\t{}", err, payload),
+                      Err(err)=>println!("ERR\t{:?}\t{}",err,payload),
+                  }
+              }
+          }
+          RS
+          cat > source/src/bin/lr_cached_counts.rs <<'RS'
+          use lrcalc::lrcoef::{lrcoef_buch_stretch_cache,lrcoef_buch_stretched_counts_u128};
+          use std::io::{self,BufRead};
+          fn parse_partition(text:&str)->Result<Vec<i32>,String>{
+              let text=text.trim(); if text.is_empty()||text=="0"{return Ok(Vec::new())}
+              text.split(',').filter(|x|!x.trim().is_empty()).map(|x|x.trim().parse::<i32>().map_err(|_|format!("bad integer {x}"))).collect()
+          }
+          fn main(){
+              let stdin=io::stdin();
+              for line in stdin.lock().lines(){
+                  let Ok(line)=line else{continue}; let line=line.trim(); if line.is_empty()||line.starts_with('#'){continue}
+                  let fields:Vec<&str>=line.split(';').collect();
+                  if fields.len()!=4{println!("ERR\texpected q;outer;inner;content\t{line}");continue}
+                  let Ok(q)=fields[0].parse::<u64>() else{println!("ERR\tbad_q\t{line}");continue};
+                  let parsed=(||->Result<[Vec<i32>;3],String>{Ok([parse_partition(fields[1])?,parse_partition(fields[2])?,parse_partition(fields[3])?])})();
+                  let Ok(parts)=parsed else{println!("ERR\tparse\t{line}");continue};
+                  match lrcoef_buch_stretch_cache(&parts[0],&parts[1],&parts[2]){
+                      Ok(Some(cache))=>match lrcoef_buch_stretched_counts_u128(&cache,q){
+                          Ok(counts)=>println!("OK\t{}\t{}\t{}\t{}",cache.dimension(),counts.full,counts.interior,line),
+                          Err(err)=>println!("ERR\t{:?}\t{}",err,line),},
+                      Ok(None)=>println!("EMPTY\t{}",line), Err(err)=>println!("ERR\t{:?}\t{}",err,line),
                   }
               }
           }
           RS
       - name: Build optimized binaries
         working-directory: source
-        run: cargo build --release --bin lrcalc --bin lr_batch
+        run: cargo build --release --bin lrcalc --bin lr_batch --bin lr_cached_counts
       - name: Smoke test
         working-directory: source
         run: |
           ./target/release/lrcalc --version
           ./target/release/lrcalc lr-stretch-hvector 3 2 1 - 2 1 - 2 1
           printf '3,2,1;2,1;2,1\nD\t3,2,1;2,1;2,1\n' | ./target/release/lr_batch
+          printf '2;3,2,1;2,1;2,1\n' | ./target/release/lr_cached_counts
       - name: Package
         run: |
           mkdir artifact
           cp source/target/release/lrcalc artifact/lrcalc-rs-linux-x86_64
           cp source/target/release/lr_batch artifact/lrcalc-rs-batch-linux-x86_64
+          cp source/target/release/lr_cached_counts artifact/lrcalc-rs-cached-counts-linux-x86_64
           cp source/COPYING artifact/COPYING
           tar --exclude=.git -czf artifact/lrcalc-rs-source.tar.gz -C source .
-          sha256sum artifact/lrcalc-rs-linux-x86_64 artifact/lrcalc-rs-batch-linux-x86_64 artifact/lrcalc-rs-source.tar.gz > artifact/SHA256SUMS
+          sha256sum artifact/lrcalc-rs-linux-x86_64 artifact/lrcalc-rs-batch-linux-x86_64 artifact/lrcalc-rs-cached-counts-linux-x86_64 artifact/lrcalc-rs-source.tar.gz > artifact/SHA256SUMS
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
