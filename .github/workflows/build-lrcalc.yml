@@ -19,21 +19,74 @@ jobs:
     steps:
       - name: Clone lrcalc-rs
         run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
-      - name: Build optimized binary
+      - name: Add persistent batch driver
+        run: |
+          mkdir -p source/src/bin
+          cat > source/src/bin/lr_batch.rs <<'RS'
+          use lrcalc::lr_ehrhart::lr_stretch_h_vector;
+          use std::io::{self, BufRead};
+
+          fn parse_partition(text: &str) -> Result<Vec<i32>, String> {
+              let text = text.trim();
+              if text.is_empty() || text == "0" {
+                  return Ok(Vec::new());
+              }
+              text.split(',')
+                  .filter(|piece| !piece.trim().is_empty())
+                  .map(|piece| piece.trim().parse::<i32>().map_err(|_| format!("bad integer {piece}")))
+                  .collect()
+          }
+
+          fn main() {
+              let stdin = io::stdin();
+              for line in stdin.lock().lines() {
+                  let Ok(line) = line else { continue };
+                  let line = line.trim();
+                  if line.is_empty() || line.starts_with('#') { continue; }
+                  let fields: Vec<&str> = line.split(';').collect();
+                  if fields.len() != 3 {
+                      println!("ERR\texpected outer;inner;content\t{line}");
+                      continue;
+                  }
+                  let parsed = (|| -> Result<[Vec<i32>; 3], String> {
+                      Ok([
+                          parse_partition(fields[0])?,
+                          parse_partition(fields[1])?,
+                          parse_partition(fields[2])?,
+                      ])
+                  })();
+                  let Ok(parts) = parsed else {
+                      println!("ERR\tparse\t{line}");
+                      continue;
+                  };
+                  match lr_stretch_h_vector(&parts[0], &parts[1], &parts[2]) {
+                      Ok(poly) => {
+                          let h = poly.h_vector.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
+                          let pts = poly.sample_points.iter().map(|(x,y)| format!("{x}:{y}")).collect::<Vec<_>>().join(",");
+                          println!("OK\t{}\t{}\t{}\t{}", poly.dimension, h, pts, line);
+                      }
+                      Err(err) => println!("ERR\t{:?}\t{}", err, line),
+                  }
+              }
+          }
+          RS
+      - name: Build optimized binaries
         working-directory: source
-        run: cargo build --release --bin lrcalc
+        run: cargo build --release --bin lrcalc --bin lr_batch
       - name: Smoke test
         working-directory: source
         run: |
           ./target/release/lrcalc --version
           ./target/release/lrcalc lr-stretch-hvector 3 2 1 - 2 1 - 2 1
+          printf '3,2,1;2,1;2,1\n' | ./target/release/lr_batch
       - name: Package
         run: |
           mkdir artifact
           cp source/target/release/lrcalc artifact/lrcalc-rs-linux-x86_64
+          cp source/target/release/lr_batch artifact/lrcalc-rs-batch-linux-x86_64
           cp source/COPYING artifact/COPYING
           tar --exclude=.git -czf artifact/lrcalc-rs-source.tar.gz -C source .
-          sha256sum artifact/lrcalc-rs-linux-x86_64 artifact/lrcalc-rs-source.tar.gz > artifact/SHA256SUMS
+          sha256sum artifact/lrcalc-rs-linux-x86_64 artifact/lrcalc-rs-batch-linux-x86_64 artifact/lrcalc-rs-source.tar.gz > artifact/SHA256SUMS
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
