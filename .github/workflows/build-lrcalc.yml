@@ -23,7 +23,7 @@ jobs:
         run: |
           mkdir -p source/src/bin
           cat > source/src/bin/lr_batch.rs <<'RS'
-          use lrcalc::lr_ehrhart::lr_stretch_h_vector;
+          use lrcalc::lr_ehrhart::{lr_stretch_dimension, lr_stretch_h_vector};
           use std::io::{self, BufRead};
 
           fn parse_partition(text: &str) -> Result<Vec<i32>, String> {
@@ -43,9 +43,13 @@ jobs:
                   let Ok(line) = line else { continue };
                   let line = line.trim();
                   if line.is_empty() || line.starts_with('#') { continue; }
-                  let fields: Vec<&str> = line.split(';').collect();
+                  let (dimension_only, payload) = match line.strip_prefix("D\t") {
+                      Some(rest) => (true, rest),
+                      None => (false, line),
+                  };
+                  let fields: Vec<&str> = payload.split(';').collect();
                   if fields.len() != 3 {
-                      println!("ERR\texpected outer;inner;content\t{line}");
+                      println!("ERR\texpected outer;inner;content\t{payload}");
                       continue;
                   }
                   let parsed = (|| -> Result<[Vec<i32>; 3], String> {
@@ -56,16 +60,24 @@ jobs:
                       ])
                   })();
                   let Ok(parts) = parsed else {
-                      println!("ERR\tparse\t{line}");
+                      println!("ERR\tparse\t{payload}");
                       continue;
                   };
+                  if dimension_only {
+                      match lr_stretch_dimension(&parts[0], &parts[1], &parts[2]) {
+                          Ok(Some(dimension)) => println!("DIM\t{}\t{}", dimension, payload),
+                          Ok(None) => println!("EMPTY\t{}", payload),
+                          Err(err) => println!("ERR\t{:?}\t{}", err, payload),
+                      }
+                      continue;
+                  }
                   match lr_stretch_h_vector(&parts[0], &parts[1], &parts[2]) {
                       Ok(poly) => {
                           let h = poly.h_vector.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
                           let pts = poly.sample_points.iter().map(|(x,y)| format!("{x}:{y}")).collect::<Vec<_>>().join(",");
-                          println!("OK\t{}\t{}\t{}\t{}", poly.dimension, h, pts, line);
+                          println!("OK\t{}\t{}\t{}\t{}", poly.dimension, h, pts, payload);
                       }
-                      Err(err) => println!("ERR\t{:?}\t{}", err, line),
+                      Err(err) => println!("ERR\t{:?}\t{}", err, payload),
                   }
               }
           }
@@ -78,7 +90,7 @@ jobs:
         run: |
           ./target/release/lrcalc --version
           ./target/release/lrcalc lr-stretch-hvector 3 2 1 - 2 1 - 2 1
-          printf '3,2,1;2,1;2,1\n' | ./target/release/lr_batch
+          printf '3,2,1;2,1;2,1\nD\t3,2,1;2,1;2,1\n' | ./target/release/lr_batch
       - name: Package
         run: |
           mkdir artifact
