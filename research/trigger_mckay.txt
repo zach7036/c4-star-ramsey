@@ -1,0 +1,1 @@
+Retrieve the McKay–Afzaly order-49 C4-free graph data for exact minimum-degree verification.
