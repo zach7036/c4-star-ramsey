@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - .github/workflows/f42-exact-search.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - research/f42_sat.py
+      - .github/workflows/f42-search.yml
+      - .github/workflows/f42-exact-search.yml
   workflow_dispatch:
 
 permissions:
