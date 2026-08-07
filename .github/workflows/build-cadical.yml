@@ -1,0 +1,37 @@
+name: Build CaDiCaL SAT solver
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - research/f42_sat.py
+      - .github/workflows/build-cadical.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Clone CaDiCaL 3.0.1
+        run: git clone --depth 1 --branch rel-3.0.1 https://github.com/arminbiere/cadical.git source
+      - name: Build optimized binary
+        working-directory: source
+        run: ./configure && make -j2
+      - name: Smoke test and package
+        run: |
+          source/build/cadical --version
+          mkdir -p artifact
+          cp source/build/cadical artifact/cadical-3.0.1-linux-x86_64
+          cp source/LICENSE artifact/CADICAL-LICENSE
+          sha256sum artifact/* > artifact/SHA256SUMS
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cadical-3.0.1-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 2
