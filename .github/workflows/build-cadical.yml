@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - research/f42_sat.py
+      - research/trigger_cadical.txt
       - .github/workflows/build-cadical.yml
   workflow_dispatch:
 
