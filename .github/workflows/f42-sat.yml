@@ -1,0 +1,54 @@
+name: f42 exact SAT search
+
+on:
+  push:
+    branches:
+      - research/f42-sat-20260807
+    paths:
+      - f42_sat.py
+      - .github/workflows/f42-sat.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  solve:
+    name: case ${{ matrix.case }} / CaDiCaL
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        case: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install exact SAT solver
+        run: python -m pip install python-sat==1.9.dev7
+
+      - name: Solve canonical case
+        run: |
+          mkdir -p f42-results
+          python f42_sat.py \
+            --case "${{ matrix.case }}" \
+            --solvers cadical195 \
+            --outdir f42-results \
+            --write-cnf
+
+      - name: Upload case data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f42-cadical-case-${{ matrix.case }}
+          path: f42-results/
+          if-no-files-found: warn
+          retention-days: 30
