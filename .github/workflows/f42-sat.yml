@@ -7,6 +7,12 @@ on:
     paths:
       - f42_sat.py
       - .github/workflows/f42-sat.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - f42_sat.py
+      - .github/workflows/f42-sat.yml
   workflow_dispatch:
 
 permissions:
