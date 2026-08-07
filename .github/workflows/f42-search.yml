@@ -30,6 +30,9 @@ jobs:
         run: python -m pip install --pre python-sat
       - name: Solve canonical orbit
         run: |
+          # Python's bool is a subclass of int; make the intended literal test explicit.
+          sed -i 's/if isinstance(lit, int):/if type(lit) is int:/g' research/f42_sat.py
+          python -m py_compile research/f42_sat.py
           mkdir -p f42-results
           timeout 1200s python research/f42_sat.py --case "${{ matrix.case }}" --out-dir f42-results | tee "f42-results/case_${{ matrix.case }}.log"
       - name: Upload result
