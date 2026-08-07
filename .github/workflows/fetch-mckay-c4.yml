@@ -1,0 +1,61 @@
+name: Fetch McKay C4-free graph data
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - research/trigger_mckay.txt
+      - .github/workflows/fetch-mckay-c4.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch and identify the C4 order-49 data link
+        run: |
+          python - <<'PY'
+          import html, pathlib, re, urllib.parse, urllib.request
+          page_url = 'https://users.cecs.anu.edu.au/~bdm/data/extremal.html'
+          raw = urllib.request.urlopen(page_url, timeout=60).read()
+          text = raw.decode('utf-8', 'replace')
+          pathlib.Path('extremal.html').write_bytes(raw)
+          candidates = []
+          for row in re.findall(r'<tr\b.*?</tr>', text, flags=re.I|re.S):
+              plain = html.unescape(re.sub(r'<[^>]*>', ' ', row))
+              nums = re.findall(r'\d+', plain)
+              if len(nums) >= 3 and nums[0:3] == ['49', '174', '6']:
+                  hrefs = re.findall(r'href\s*=\s*["\']([^"\']+)', row, flags=re.I)
+                  candidates.extend(hrefs)
+                  print('MATCHED_ROW=', plain.strip())
+                  print('HREFS=', hrefs)
+          if not candidates:
+              pos = text.find('174')
+              pathlib.Path('diagnostic.txt').write_text(text[max(0,pos-3000):pos+3000])
+              raise SystemExit('Could not identify the order-49, 174-edge row')
+          href = candidates[-1]
+          url = urllib.parse.urljoin(page_url, href)
+          print('DATA_URL=', url)
+          data = urllib.request.urlopen(url, timeout=60).read()
+          name = pathlib.Path(urllib.parse.urlparse(url).path).name or 'c4-order49-data.bin'
+          pathlib.Path(name).write_bytes(data)
+          pathlib.Path('source-url.txt').write_text(url + '\n')
+          PY
+      - name: Package retrieved source data
+        run: |
+          mkdir -p artifact
+          cp extremal.html source-url.txt artifact/
+          find . -maxdepth 1 -type f \( -name '*.s6' -o -name '*.s6.gz' -o -name '*.g6' -o -name '*.g6.gz' -o -name '*.bin' \) -exec cp {} artifact/ \;
+          sha256sum artifact/* > artifact/SHA256SUMS
+          ls -l artifact
+      - name: Upload source data
+        uses: actions/upload-artifact@v4
+        with:
+          name: mckay-c4-order49
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 2
