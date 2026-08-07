@@ -7,6 +7,12 @@ on:
     paths:
       - research/f42_sat.py
       - .github/workflows/f42-search.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - research/f42_sat.py
+      - .github/workflows/f42-search.yml
 
 permissions:
   contents: write
@@ -15,7 +21,7 @@ jobs:
   orbit:
     name: orbit-${{ matrix.case }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       max-parallel: 20
@@ -34,7 +40,7 @@ jobs:
           sed -i 's/if isinstance(lit, int):/if type(lit) is int:/g' research/f42_sat.py
           python -m py_compile research/f42_sat.py
           mkdir -p f42-results
-          timeout 1200s python research/f42_sat.py --case "${{ matrix.case }}" --out-dir f42-results | tee "f42-results/case_${{ matrix.case }}.log"
+          timeout 2400s python research/f42_sat.py --case "${{ matrix.case }}" --out-dir f42-results | tee "f42-results/case_${{ matrix.case }}.log"
       - name: Upload result
         if: always()
         uses: actions/upload-artifact@v4
@@ -89,6 +95,7 @@ jobs:
           print(json.dumps({k: summary[k] for k in ('completed_cases','missing_cases','status_counts','all_unsat','any_sat')}, indent=2))
           PY
       - name: Commit result snapshot to research branch
+        if: github.event_name == 'push'
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
