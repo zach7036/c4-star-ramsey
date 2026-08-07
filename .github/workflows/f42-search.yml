@@ -9,7 +9,7 @@ on:
       - .github/workflows/f42-search.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   orbit:
@@ -39,3 +39,60 @@ jobs:
           name: f42-case-${{ matrix.case }}
           path: f42-results/
           if-no-files-found: warn
+
+  aggregate:
+    name: aggregate-results
+    needs: orbit
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/f52-sat-20260807
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: f42-case-*
+          path: gathered
+          merge-multiple: true
+      - name: Build machine-readable summary
+        run: |
+          python - <<'PY'
+          import glob, json, pathlib
+          records = []
+          for fn in sorted(glob.glob('gathered/case_*.json')):
+              try:
+                  records.append(json.load(open(fn)))
+              except Exception as exc:
+                  print('could not read', fn, exc)
+          by_case = {int(r['case']): r for r in records}
+          expected = list(range(44))
+          summary = {
+              'expected_cases': 44,
+              'completed_cases': len(by_case),
+              'missing_cases': [i for i in expected if i not in by_case],
+              'status_counts': {},
+              'all_unsat': len(by_case) == 44 and all(r.get('status') == 'UNSAT' for r in by_case.values()),
+              'any_sat': any(r.get('status') == 'SAT' for r in by_case.values()),
+              'records': [by_case[i] for i in sorted(by_case)],
+          }
+          for r in by_case.values():
+              s = r.get('status', 'UNKNOWN')
+              summary['status_counts'][s] = summary['status_counts'].get(s, 0) + 1
+          out = pathlib.Path('research-results/f42')
+          out.mkdir(parents=True, exist_ok=True)
+          (out / 'summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          for fn in glob.glob('gathered/case_*.json'):
+              pathlib.Path(out / pathlib.Path(fn).name).write_bytes(pathlib.Path(fn).read_bytes())
+          print(json.dumps({k: summary[k] for k in ('completed_cases','missing_cases','status_counts','all_unsat','any_sat')}, indent=2))
+          PY
+      - name: Commit result snapshot to research branch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add research-results/f42
+          if git diff --cached --quiet; then
+            echo 'No new result files to commit.'
+          else
+            git commit -m 'Record exhaustive f(42) SAT orbit results'
+            git push origin HEAD:research/f52-sat-20260807
+          fi
