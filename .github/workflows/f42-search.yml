@@ -1,3 +1,4 @@
+# Monitored exhaustive computation for the open f(42) case.
 name: Exact f(42) SAT orbit search
 
 on:
