@@ -1,0 +1,120 @@
+name: Guarded sharded exhaustive size-30 LR dimension-10 search
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  shard:
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Stop if a lower-dimensional exact release already found a negative
+        id: gate
+        run: |
+          python - <<'PY'
+          import json,urllib.request
+          urls=[
+            'https://github.com/zach7036/c4-star-ramsey/releases/download/lr-dim34-exhaustive-v1/dim34_summary.json',
+            'https://github.com/zach7036/c4-star-ramsey/releases/download/lr-dim34-top7-v1/dim34_summary.json',
+            'https://github.com/zach7036/c4-star-ramsey/releases/download/lr-lowdim-exhaustive-v1/lowdim_summary.json',
+            'https://github.com/zach7036/c4-star-ramsey/releases/download/lr-dim8-exhaustive-v1/dim8_summary.json',
+            'https://github.com/zach7036/c4-star-ramsey/releases/download/lr-dim9-exhaustive-v1/dim9_combined_summary.json']
+          hit=False
+          for u in urls:
+            try:
+              x=json.load(urllib.request.urlopen(u,timeout=20))
+              hit |= int(x.get('negative_hits',0))>0
+            except Exception: pass
+          open('/tmp/gate','w').write('true' if hit else 'false')
+          PY
+          echo "skip=$(cat /tmp/gate)" >> "$GITHUB_OUTPUT"
+      - if: steps.gate.outputs.skip != 'true'
+        run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Recover and patch the audited sharded driver
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          curl -L --fail -o /tmp/dim9.yml https://raw.githubusercontent.com/zach7036/c4-star-ramsey/automation/lr-dim9-sharded/.github/workflows/run-lr-dim9-sharded.yml
+          mkdir -p source/src/bin
+          awk '/cat > source\/src\/bin\/dim9_shard.rs <<'"'"'RS'"'"'/{flag=1;next} flag && /^          RS$/{flag=0;exit} flag{sub(/^          /,"");print}' /tmp/dim9.yml > source/src/bin/dim10_shard.rs
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('source/src/bin/dim10_shard.rs');s=p.read_text()
+          s=s.replace('dim9_', 'dim10_').replace('d9', 'd10').replace('dimension9', 'dimension10')
+          s=s.replace('d!=9', 'd!=10').replace('let mut d10=0u64', 'let mut d10=0u64')
+          s=s.replace('for k in 1..=5', 'for k in 1..=6')
+          p.write_text(s)
+          PY
+      - if: steps.gate.outputs.skip != 'true'
+        working-directory: source
+        run: cargo build --release --bin dim10_shard
+      - name: Run shard
+        if: steps.gate.outputs.skip != 'true'
+        working-directory: source
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: ./target/release/dim10_shard
+      - name: Package shard
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          mkdir artifact
+          cp source/dim10_*_${{ matrix.shard }}.* artifact/
+          cp source/src/bin/dim10_shard.rs artifact/
+          gzip -9 artifact/dim10_closest_${{ matrix.shard }}.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS_${{ matrix.shard }}
+      - if: steps.gate.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dim10-shard-${{ matrix.shard }}
+          path: artifact/
+          retention-days: 1
+
+  combine:
+    if: always()
+    needs: shard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dim10-shard-*
+          path: shards
+          merge-multiple: true
+        continue-on-error: true
+      - name: Combine and publish available exact records
+        run: |
+          mkdir release
+          cp shards/dim10_summary_*.json release/ 2>/dev/null || true
+          cat shards/dim10_negative_*.tsv > release/dim10_negative.tsv 2>/dev/null || true
+          cat shards/dim10_errors_*.tsv > release/dim10_errors.tsv 2>/dev/null || true
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          rows=[]
+          for p in Path('release').glob('dim10_summary_*.json'):
+              try: rows.append(json.loads(p.read_text()))
+              except: pass
+          out={'shards_received':len(rows),'assigned':sum(x.get('assigned',0) for x in rows),'completed':sum(x.get('completed',0) for x in rows),'failed':sum(x.get('failed',0) for x in rows),'negative_hits':sum(x.get('negative_hits',0) for x in rows),'dimension10_global':max([x.get('dimension10_global_seen',0) for x in rows] or [0])}
+          Path('release/dim10_combined_summary.json').write_text(json.dumps(out,indent=2))
+          PY
+          sha256sum release/* > release/SHA256SUMS
+          gh release delete lr-dim10-exhaustive-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-dim10-exhaustive-v1 || true
+          gh release create lr-dim10-exhaustive-v1 release/* --repo "$GITHUB_REPOSITORY" --title "Guarded sharded complete LR dimension-10 search" --notes "Exact size-30 dimension-10 census; hard cases listed separately."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-lr-dim10-combined
+          path: release/
+          retention-days: 1
