@@ -1,0 +1,105 @@
+name: Exact f(42) orbit search
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/f42-exact-search.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  orbit:
+    name: orbit-${{ matrix.case }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        case: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/f52-sat-20260807
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact SAT backend
+        run: python -m pip install python-sat
+      - name: Solve canonical orbit
+        run: |
+          sed -i 's/if isinstance(lit, int):/if type(lit) is int:/g' research/f42_sat.py
+          python -m py_compile research/f42_sat.py
+          mkdir -p f42-results
+          timeout 1500s python research/f42_sat.py --case "${{ matrix.case }}" --out-dir f42-results | tee "f42-results/case_${{ matrix.case }}.log"
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f42-case-${{ matrix.case }}
+          path: f42-results/
+          if-no-files-found: warn
+          retention-days: 7
+
+  aggregate:
+    name: aggregate-results
+    needs: orbit
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/f52-sat-20260807
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: f42-case-*
+          path: gathered
+          merge-multiple: true
+      - name: Build machine-readable summary
+        run: |
+          python - <<'PY'
+          import glob, json, pathlib
+          records = []
+          for fn in sorted(glob.glob('gathered/case_*.json')):
+              try:
+                  records.append(json.load(open(fn)))
+              except Exception as exc:
+                  print('could not read', fn, exc)
+          by_case = {int(r['case']): r for r in records}
+          expected = list(range(44))
+          summary = {
+              'expected_cases': 44,
+              'completed_cases': len(by_case),
+              'missing_cases': [i for i in expected if i not in by_case],
+              'status_counts': {},
+              'all_unsat': len(by_case) == 44 and all(r.get('status') == 'UNSAT' for r in by_case.values()),
+              'any_sat': any(r.get('status') == 'SAT' for r in by_case.values()),
+              'records': [by_case[i] for i in sorted(by_case)],
+          }
+          for r in by_case.values():
+              s = r.get('status', 'UNKNOWN')
+              summary['status_counts'][s] = summary['status_counts'].get(s, 0) + 1
+          out = pathlib.Path('research-results/f42')
+          out.mkdir(parents=True, exist_ok=True)
+          (out / 'summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          for fn in glob.glob('gathered/case_*.json'):
+              pathlib.Path(out / pathlib.Path(fn).name).write_bytes(pathlib.Path(fn).read_bytes())
+          for fn in glob.glob('gathered/case_*.log'):
+              pathlib.Path(out / pathlib.Path(fn).name).write_bytes(pathlib.Path(fn).read_bytes())
+          print(json.dumps({k: summary[k] for k in ('completed_cases','missing_cases','status_counts','all_unsat','any_sat')}, indent=2))
+          PY
+      - name: Commit result snapshot to research branch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add research-results/f42
+          if git diff --cached --quiet; then
+            echo 'No new result files to commit.'
+          else
+            git commit -m 'Record exact f(42) orbit-search results'
+            git push origin HEAD:research/f52-sat-20260807
+          fi
