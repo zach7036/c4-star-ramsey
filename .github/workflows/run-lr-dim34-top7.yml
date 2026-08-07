@@ -1,0 +1,57 @@
+name: Exhaust LR dimension 3-4 on determinant-twist cap layers
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  dim34-top7:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - run: git clone --depth 1 https://github.com/PerAlexandersson/lrcalc-rs.git source
+      - name: Recover the independently defined exact driver and widen totals
+        run: |
+          curl -L --fail -o /tmp/base.yml https://raw.githubusercontent.com/zach7036/c4-star-ramsey/automation/lr-dim34-exhaustive/.github/workflows/run-lr-dim34-exhaustive.yml
+          mkdir -p source/src/bin
+          awk '/cat > source\/src\/bin\/dim34.rs <<'"'"'RS'"'"'/{flag=1;next} flag && /^          RS$/{flag=0;exit} flag{sub(/^          /,"");print}' /tmp/base.yml > source/src/bin/dim34.rs
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('source/src/bin/dim34.rs');s=p.read_text()
+          old='for a in 0usize..=15{let z=30-a;for l in&b[a]{for r in&b[z]{if a==z&&l>r{continue}'
+          new='for total in 24usize..=30{for a in 0usize..=total/2{let z=total-a;for l in&b[a]{for r in&b[z]{if a==z&&l>r{continue}'
+          if old not in s: raise SystemExit('loop anchor missing')
+          s=s.replace(old,new,1)
+          # One additional closing brace for the total loop.
+          anchor='            }}}\n            closest.sort_by'
+          if anchor not in s: raise SystemExit('closing anchor missing')
+          s=s.replace(anchor,'            }}}}\n            closest.sort_by',1)
+          p.write_text(s)
+          PY
+      - working-directory: source
+        run: cargo build --release --bin dim34
+      - working-directory: source
+        run: ./target/release/dim34
+      - name: Publish
+        run: |
+          mkdir artifact
+          cp source/dim34_* artifact/
+          cp source/src/bin/dim34.rs artifact/
+          gzip -9 artifact/dim34_all.tsv artifact/dim34_closest.tsv
+          sha256sum artifact/* > artifact/SHA256SUMS
+          gh release delete lr-dim34-top7-v1 --repo "$GITHUB_REPOSITORY" --yes || true
+          git push origin :refs/tags/lr-dim34-top7-v1 || true
+          gh release create lr-dim34-top7-v1 artifact/* --repo "$GITHUB_REPOSITORY" --title "Complete LR dimension 3-4 cap-layer search" --notes "Exact exhaustive totals 24 through 30; determinant twists cover all smaller admissible sizes."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-lr-dim34-top7
+          path: artifact/
+          retention-days: 1
