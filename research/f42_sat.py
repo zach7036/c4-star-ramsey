@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Exact SAT search for a 49-vertex C4-free graph with minimum degree 7.
 
-A counterexample to R(C4,K1,42)=49 must have degrees 7/8.  Choosing an
+A counterexample to R(C4,K1,42)=49 must have degrees 7/8. Choosing an
 8-valent root fixes a radius-two partition into eight five-vertex blocks.
 This script exhausts all canonical distributions of the remaining 8-valent
 vertices and all graph completions compatible with that partition.
 
-Each case is an exact CNF instance.  SAT produces and independently verifies
-an explicit graph.  UNSAT eliminates the corresponding isomorphism class.
+Each case is an exact CNF instance. SAT produces and independently verifies
+an explicit graph. UNSAT eliminates the corresponding isomorphism class.
 """
 from __future__ import annotations
 
@@ -15,8 +15,6 @@ import argparse
 import collections
 import itertools
 import json
-import os
-import sys
 import time
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -34,12 +32,7 @@ def sv(block: int, pos: int) -> int:
 
 
 def canonical_orbits() -> list[tuple[int, ...]]:
-    """One high-vertex distribution per Aut(4K2)-orbit.
-
-    If h_i is the number of additional degree-8 vertices in block i, then
-    h_i <= 2, sum h_i is even, and the incidence bound gives sum h_i <= 8.
-    The root matching acts by swapping partners and permuting the four pairs.
-    """
+    """One high-vertex distribution per Aut(4K2)-orbit."""
     out: list[tuple[int, ...]] = []
     for total in (0, 2, 4, 6, 8):
         reps: set[tuple[tuple[int, int], ...]] = set()
@@ -108,7 +101,7 @@ class Instance:
                         e = self.key(sv(i, a), sv(j, b))
                         self.edge_var[e] = self.pool.id(("e",) + e)
 
-        # Canonical internal matching in each block.  This is a sound orbit
+        # Canonical internal matching in each block. This is a sound orbit
         # reduction under the within-block symmetric group.
         for i, h in enumerate(self.hvec):
             for a, b in itertools.combinations(range(5), 2):
@@ -125,10 +118,13 @@ class Instance:
             elif h == 1:
                 z2 = self.pool.id(("z2", i))
                 self.zvars[i] = (z2,)
+                self.fixed.pop(self.key(sv(i, 0), sv(i, 1)))
                 self.set_fixed(sv(i, 0), sv(i, 1), True)
                 self.fixed.pop(self.key(sv(i, 2), sv(i, 3)))
                 self.edge_var[self.key(sv(i, 2), sv(i, 3))] = z2
             elif h == 2:
+                self.fixed.pop(self.key(sv(i, 0), sv(i, 2)))
+                self.fixed.pop(self.key(sv(i, 1), sv(i, 3)))
                 self.set_fixed(sv(i, 0), sv(i, 2), True)
                 self.set_fixed(sv(i, 1), sv(i, 3), True)
             else:
@@ -192,7 +188,7 @@ class Instance:
         self.cnf.extend(enc.clauses)
 
     def add_structure(self) -> None:
-        # Every cross-block bipartite graph is a matching.  These clauses are
+        # Every cross-block bipartite graph is a matching. These clauses are
         # implied by C4-freeness but substantially strengthen propagation.
         for i in range(8):
             for j in range(i + 1, 8):
@@ -216,8 +212,7 @@ class Instance:
                 self.add_exactly(incident, 6 + (a < h))
         self.stats["after_degree_clauses"] = len(self.cnf.clauses)
 
-        # Exact C4 exclusion in the full 49-vertex graph: for every labelled
-        # 4-cycle, at least one of its four edges is absent.
+        # Exact C4 exclusion in the full 49-vertex graph.
         c4_candidates = 0
         for a, b, c, d in itertools.combinations(range(N), 4):
             for cyc in ((a, b, c, d), (a, b, d, c), (a, c, b, d)):
@@ -289,7 +284,7 @@ def solve_case(case_index: int, solver_name: str | None = None) -> dict[str, obj
                 if result:
                     model = solver.get_model()
             break
-        except Exception as exc:  # pragma: no cover - depends on wheel build
+        except Exception as exc:  # pragma: no cover
             last_error = exc
     if result is None:
         raise RuntimeError(f"no requested SAT solver is available: {last_error}")
