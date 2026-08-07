@@ -1,0 +1,1 @@
+Fetch the current McKay–Afzaly order-49 C4-free graph collection for independent screening.
