@@ -1,0 +1,1 @@
+Fetch and preserve the McKay–Afzaly order-49, 174-edge C4-free graph dataset for exact degree verification.
